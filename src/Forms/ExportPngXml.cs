@@ -2774,8 +2774,11 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     if (parameter.P.Text.Contains("<font ", StringComparison.OrdinalIgnoreCase) && !parameter.P.Text.Contains("</font>", StringComparison.OrdinalIgnoreCase))
                     {
                         int start = parameter.P.Text.LastIndexOf("<font ", StringComparison.OrdinalIgnoreCase);
-                        int end = parameter.P.Text.IndexOf('>', start);
-                        fontTag = parameter.P.Text.Substring(start, end - start + 1);
+                        int end = parameter.P.Text.IndexOf('>', start + 6);
+                        if (end > start)
+                        {
+                            fontTag = parameter.P.Text.Substring(start, end - start + 1);
+                        }
                     }
 
                     var lineImage = GenerateImageFromTextWithStyleInner(parameter);
