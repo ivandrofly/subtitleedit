@@ -4385,7 +4385,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                 comboBoxResolution.Items.Add("DVCPROHD-1080i50");
                 comboBoxResolution.Items.Add("HD-(1440x1080)");
                 comboBoxResolution.SelectedIndex = 7; // FullHD
-                if (_exportType == ExportFormats.Fcp && !string.IsNullOrEmpty(Configuration.Settings.Tools.ExportFcpVideoResolution))
+                if (!string.IsNullOrEmpty(Configuration.Settings.Tools.ExportFcpVideoResolution))
                 {
                     SetResolution(Configuration.Settings.Tools.ExportFcpVideoResolution);
                 }
