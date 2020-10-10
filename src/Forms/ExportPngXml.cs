@@ -2927,12 +2927,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
             try
             {
                 font = SetFont(parameter, parameter.SubtitleFontSize);
-                SizeF textSize;
-                using (var bmpTemp = new Bitmap(1, 1))
-                using (var g = Graphics.FromImage(bmpTemp))
-                {
-                    textSize = g.MeasureString(HtmlUtil.RemoveHtmlTags(text), font);
-                }
+                SizeF textSize = MeasureString(HtmlUtil.RemoveHtmlTags(text), font);
                 int sizeX = (int)(textSize.Width * 1.8) + 150;
                 int sizeY = (int)(textSize.Height * 0.9) + 50;
                 if (sizeX < 1)
@@ -4459,11 +4454,8 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
             };
             var fontSize = (float)TextDraw.GetFontSize(mbp.SubtitleFontSize);
             using (var font = SetFont(mbp, fontSize))
-            using (var bmp = new Bitmap(100, 100))
-            using (var g = Graphics.FromImage(bmp))
             {
-                var textSize = g.MeasureString("Hj!", font);
-                return textSize.Height;
+                return MeasureString("Hj!", font).Height;
             }
         }
 
@@ -4475,29 +4467,35 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                 if (!string.IsNullOrEmpty(paragraph.Extra) && !_lineHeights.ContainsKey(styleName))
                 {
                     var style = AdvancedSubStationAlpha.GetSsaStyle(paragraph.Extra, subtitle.Header);
-                    using (var bmp = new Bitmap(100, 100))
+                    var mbp = new MakeBitmapParameter
                     {
-                        using (var g = Graphics.FromImage(bmp))
-                        {
-                            var mbp = new MakeBitmapParameter
-                            {
-                                SubtitleFontName = style.FontName,
-                                SubtitleFontSize = style.FontSize,
-                                SubtitleFontBold = style.Bold
-                            };
-                            var fontSize = (float)TextDraw.GetFontSize(mbp.SubtitleFontSize);
-                            Font font = SetFont(mbp, fontSize);
-                            SizeF textSize = g.MeasureString("Hj!", font);
-                            int lineHeight = (int)Math.Round(textSize.Height * 0.64f);
-                            if (fontSize < 30)
-                            {
-                                lineHeight = (int)Math.Round(textSize.Height * 0.69f);
-                            }
-
-                            _lineHeights.Add(styleName, lineHeight);
-                        }
+                        SubtitleFontName = style.FontName,
+                        SubtitleFontSize = style.FontSize,
+                        SubtitleFontBold = style.Bold
+                    };
+                    var fontSize = (float)TextDraw.GetFontSize(mbp.SubtitleFontSize);
+                    Font font = SetFont(mbp, fontSize);
+                    SizeF textSize = MeasureString("Hj!", font);
+                    int lineHeight = (int)Math.Round(textSize.Height * 0.64f);
+                    if (fontSize < 30)
+                    {
+                        lineHeight = (int)Math.Round(textSize.Height * 0.69f);
                     }
+
+                    _lineHeights.Add(styleName, lineHeight);
                 }
+            }
+        }
+
+        private static SizeF MeasureString(string input, Font font)
+        {
+            if (string.IsNullOrWhiteSpace(input) || font == null)
+            {
+                return SizeF.Empty;
+            }
+            using (var gfx = Graphics.FromHwnd(IntPtr.Zero))
+            {
+                return gfx.MeasureString(input, font);
             }
         }
 
