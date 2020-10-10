@@ -3128,8 +3128,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     }
                 }
 
-                var sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near };
-
+                using (var sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near })
                 using (var g = Graphics.FromImage(bmp))
                 {
                     g.CompositingQuality = CompositingQuality.HighQuality;
@@ -3598,7 +3597,6 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                         g.FillPath(new SolidBrush(c), path);
                     }
                 }
-                sf.Dispose();
 
                 var nbmp = new NikseBitmap(bmp);
                 if (parameter.BackgroundColor == Color.Transparent)
