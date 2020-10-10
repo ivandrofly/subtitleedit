@@ -2721,6 +2721,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
             var nbmp = new NikseBitmap(bmp);
             bmp.Dispose();
             font.Dispose();
+            path.Dispose();
             sf.Dispose();
             return nbmp;
         }
@@ -3163,6 +3164,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                             x = parameter.ScreenWidth / 2;
                         }
 
+                        bmp?.Dispose();
                         bmp = new Bitmap(parameter.ScreenWidth, sizeY);
 
                         Graphics surface = Graphics.FromImage(bmp);
@@ -3593,8 +3595,11 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                             TextDraw.DrawText(font, sf, path, sb, isItalic, isBold || parameter.SubtitleFontBold, false, left, top, ref newLine, leftMargin, ref newLinePathPoint);
                         }
 
+                        var solidBrush = new SolidBrush(c);
                         DrawShadowAndPath(parameter, g, path);
-                        g.FillPath(new SolidBrush(c), path);
+                        g.FillPath(solidBrush, path);
+                        path.Dispose();
+                        solidBrush.Dispose();
                     }
                 }
 
@@ -3629,7 +3634,12 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                         gSideBySide.DrawImage(singleHalfBmp, singleLeftMargin + parameter.Depth3D, 0);
                         gSideBySide.DrawImage(singleHalfBmp, singleWidth + singleLeftMargin - parameter.Depth3D, 0);
                     }
+                    singleHalfBmp.Dispose();
                     nbmp = new NikseBitmap(sideBySideBmp);
+
+                    // dispose on sideBySideBmp may and may not be called inside NikseBitmap (ensure it here)
+                    sideBySideBmp.Dispose();
+
                     if (parameter.BackgroundColor == Color.Transparent)
                     {
                         nbmp.CropTransparentSidesAndBottom(2, true);
