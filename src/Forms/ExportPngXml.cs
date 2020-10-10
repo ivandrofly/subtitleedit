@@ -2491,7 +2491,8 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
             var fontStack = new Stack<Font>();
             while (i < text.Length)
             {
-                if (text.Substring(i).StartsWith("<font ", StringComparison.OrdinalIgnoreCase))
+                var stringFromI = text.Substring(i);
+                if (stringFromI.StartsWith("<font ", StringComparison.OrdinalIgnoreCase))
                 {
                     float addLeft = 0;
                     int oldPathPointIndex = path.PointCount;
@@ -2526,7 +2527,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     path = new GraphicsPath();
                     sb.Clear();
 
-                    int endIndex = text.Substring(i).IndexOf('>');
+                    int endIndex = stringFromI.IndexOf('>');
                     if (endIndex < 0)
                     {
                         i += 9999;
@@ -2594,9 +2595,9 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                         i += endIndex;
                     }
                 }
-                else if (text.Substring(i).StartsWith("</font>", StringComparison.OrdinalIgnoreCase))
+                else if (stringFromI.StartsWith("</font>", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (text.Substring(i).ToLowerInvariant().Replace("</font>", string.Empty).Replace("</FONT>", string.Empty).Length > 0)
+                    if (stringFromI.ToLowerInvariant().Replace("</font>", string.Empty).Replace("</FONT>", string.Empty).Length > 0)
                     {
                         if (lastText.EndsWith(' ') && !sb.StartsWith(' '))
                         {
@@ -2654,7 +2655,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     }
                     i += 6;
                 }
-                else if (text.Substring(i).StartsWith("<i>", StringComparison.OrdinalIgnoreCase))
+                else if (stringFromI.StartsWith("<i>", StringComparison.OrdinalIgnoreCase))
                 {
                     if (sb.Length > 0)
                     {
@@ -2664,7 +2665,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     isItalic = true;
                     i += 2;
                 }
-                else if (text.Substring(i).StartsWith("</i>", StringComparison.OrdinalIgnoreCase) && isItalic)
+                else if (stringFromI.StartsWith("</i>", StringComparison.OrdinalIgnoreCase) && isItalic)
                 {
                     if (lastText.EndsWith(' ') && !sb.StartsWith(' '))
                     {
@@ -2678,7 +2679,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     isItalic = false;
                     i += 3;
                 }
-                else if (text.Substring(i).StartsWith("<b>", StringComparison.OrdinalIgnoreCase))
+                else if (stringFromI.StartsWith("<b>", StringComparison.OrdinalIgnoreCase))
                 {
                     if (sb.Length > 0)
                     {
@@ -2688,7 +2689,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     isBold = true;
                     i += 2;
                 }
-                else if (text.Substring(i).StartsWith("</b>", StringComparison.OrdinalIgnoreCase) && isBold)
+                else if (stringFromI.StartsWith("</b>", StringComparison.OrdinalIgnoreCase) && isBold)
                 {
                     if (lastText.EndsWith(' ') && !sb.StartsWith(' '))
                     {
@@ -3278,7 +3279,8 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                         var lastText = new StringBuilder();
                         for (var i = 0; i < text.Length; i++)
                         {
-                            if (text.Substring(i).StartsWith("<font ", StringComparison.OrdinalIgnoreCase))
+                            string textFromI = text.Substring(i);
+                            if (textFromI.StartsWith("<font ", StringComparison.OrdinalIgnoreCase))
                             {
                                 float addLeft = 0;
                                 int oldPathPointIndex = path.PointCount - 1;
@@ -3313,7 +3315,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                                 path = new GraphicsPath();
                                 sb = new StringBuilder();
 
-                                int endIndex = text.Substring(i).IndexOf('>');
+                                int endIndex = textFromI.IndexOf('>');
                                 if (endIndex < 0)
                                 {
                                     i += 9999;
@@ -3383,9 +3385,9 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                                     i += endIndex;
                                 }
                             }
-                            else if (text.Substring(i).StartsWith("</font>", StringComparison.OrdinalIgnoreCase))
+                            else if (textFromI.StartsWith("</font>", StringComparison.OrdinalIgnoreCase))
                             {
-                                if (text.Substring(i).ToLowerInvariant().Replace("</font>", string.Empty).Replace("</FONT>", string.Empty).Length > 0)
+                                if (textFromI.ToLowerInvariant().Replace("</font>", string.Empty).Replace("</FONT>", string.Empty).Length > 0)
                                 {
                                     if (lastText.EndsWith(' ') && !sb.StartsWith(' '))
                                     {
@@ -3443,7 +3445,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                                 }
                                 i += 6;
                             }
-                            else if (text.Substring(i).StartsWith("<i>", StringComparison.OrdinalIgnoreCase))
+                            else if (textFromI.StartsWith("<i>", StringComparison.OrdinalIgnoreCase))
                             {
                                 if (sb.Length > 0)
                                 {
@@ -3468,7 +3470,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                                 isItalic = true;
                                 i += 2;
                             }
-                            else if (text.Substring(i).StartsWith("</i>", StringComparison.OrdinalIgnoreCase) && isItalic)
+                            else if (textFromI.StartsWith("</i>", StringComparison.OrdinalIgnoreCase) && isItalic)
                             {
                                 if (lastText.EndsWith(' ') && !sb.StartsWith(' '))
                                 {
@@ -3510,11 +3512,11 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                                 isItalic = false;
                                 i += 3;
                             }
-                            else if (text.Substring(i).StartsWith("</i>", StringComparison.OrdinalIgnoreCase) && !isItalic)
+                            else if (textFromI.StartsWith("</i>", StringComparison.OrdinalIgnoreCase) && !isItalic)
                             {
                                 i += 3;
                             }
-                            else if (text.Substring(i).StartsWith("<b>", StringComparison.OrdinalIgnoreCase))
+                            else if (textFromI.StartsWith("<b>", StringComparison.OrdinalIgnoreCase))
                             {
                                 if (sb.Length > 0)
                                 {
@@ -3524,7 +3526,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                                 isBold = true;
                                 i += 2;
                             }
-                            else if (text.Substring(i).StartsWith("</b>", StringComparison.OrdinalIgnoreCase) && isBold)
+                            else if (textFromI.StartsWith("</b>", StringComparison.OrdinalIgnoreCase) && isBold)
                             {
                                 if (lastText.EndsWith(' ') && !sb.StartsWith(' '))
                                 {
@@ -3566,7 +3568,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                                 isBold = false;
                                 i += 3;
                             }
-                            else if (text.Substring(i).StartsWith(Environment.NewLine, StringComparison.Ordinal))
+                            else if (textFromI.StartsWith(Environment.NewLine, StringComparison.Ordinal))
                             {
                                 lastText.Append(sb);
                                 TextDraw.DrawText(font, sf, path, sb, isItalic, isBold, false, left, top, ref newLine, leftMargin, ref newLinePathPoint);
