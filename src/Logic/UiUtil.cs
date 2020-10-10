@@ -739,6 +739,27 @@ namespace Nikse.SubtitleEdit.Logic
             comboBox.EndUpdate();
         }
 
+        public static void InitComboBoxResolution(ComboBox cb)
+        {
+            if (cb == null)
+            {
+                return;
+            }
+            cb.BeginUpdate();
+            cb.Items.Clear();
+            cb.Items.Add("NTSC-601");
+            cb.Items.Add("PAL-601");
+            cb.Items.Add("square");
+            cb.Items.Add("DVCPROHD-720P");
+            cb.Items.Add("HD-(960x720)");
+            cb.Items.Add("DVCPROHD-1080i60");
+            cb.Items.Add("HD-(1280x1080)");
+            cb.Items.Add("FullHD 1920x1080");
+            cb.Items.Add("DVCPROHD-1080i50");
+            cb.Items.Add("HD-(1440x1080)");
+            cb.EndUpdate();
+        }
+
         public static void InitializeTextEncodingComboBox(ComboBox comboBox)
         {
             var defaultEncoding = Configuration.Settings.General.DefaultEncoding;

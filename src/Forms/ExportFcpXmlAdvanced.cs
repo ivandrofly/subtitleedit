@@ -89,17 +89,7 @@ namespace Nikse.SubtitleEdit.Forms
             comboBoxFrameRate.Items.Add(59.94.ToString(CultureInfo.CurrentCulture));
             comboBoxFrameRate.Items.Add(60.00.ToString(CultureInfo.CurrentCulture));
 
-            comboBoxResolution.Items.Clear();
-            comboBoxResolution.Items.Add("NTSC-601");
-            comboBoxResolution.Items.Add("PAL-601");
-            comboBoxResolution.Items.Add("square");
-            comboBoxResolution.Items.Add("DVCPROHD-720P");
-            comboBoxResolution.Items.Add("HD-(960x720)");
-            comboBoxResolution.Items.Add("DVCPROHD-1080i60");
-            comboBoxResolution.Items.Add("HD-(1280x1080)");
-            comboBoxResolution.Items.Add("FullHD 1920x1080");
-            comboBoxResolution.Items.Add("DVCPROHD-1080i50");
-            comboBoxResolution.Items.Add("HD-(1440x1080)");
+            UiUtil.InitComboBoxResolution(comboBoxResolution);
             comboBoxResolution.SelectedIndex = 7; // FullHD
 
             comboBoxFontName.SelectedIndex = 0;

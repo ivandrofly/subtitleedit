@@ -3794,7 +3794,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     {
                         SetLineJoin(parameter.LineJoin, p1);
                         g.DrawPath(p1, shadowPath);
-                    }
+                    } 
                 }
             }
 
@@ -4376,17 +4376,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
 
             if (_exportType == ExportFormats.Fcp)
             {
-                comboBoxResolution.Items.Clear();
-                comboBoxResolution.Items.Add("NTSC-601");
-                comboBoxResolution.Items.Add("PAL-601");
-                comboBoxResolution.Items.Add("square");
-                comboBoxResolution.Items.Add("DVCPROHD-720P");
-                comboBoxResolution.Items.Add("HD-(960x720)");
-                comboBoxResolution.Items.Add("DVCPROHD-1080i60");
-                comboBoxResolution.Items.Add("HD-(1280x1080)");
-                comboBoxResolution.Items.Add("FullHD 1920x1080");
-                comboBoxResolution.Items.Add("DVCPROHD-1080i50");
-                comboBoxResolution.Items.Add("HD-(1440x1080)");
+                UiUtil.InitComboBoxResolution(comboBoxResolution);
                 comboBoxResolution.SelectedIndex = 7; // FullHD
                 if (!string.IsNullOrEmpty(Configuration.Settings.Tools.ExportFcpVideoResolution))
                 {
