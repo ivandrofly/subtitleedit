@@ -4440,14 +4440,13 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                         }
                     }
                 }
-
-                SubtitleListView1SelectIndexAndEnsureVisible(0);
             }
             else
             {
                 SubtitleListView1Fill(_subtitle);
-                SubtitleListView1SelectIndexAndEnsureVisible(0);
             }
+
+            SubtitleListView1SelectIndexAndEnsureVisible(0);
         }
 
         private float GetFontHeight()
