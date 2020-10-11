@@ -2597,7 +2597,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                 }
                 else if (stringFromI.StartsWith("</font>", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (stringFromI.ToLowerInvariant().Replace("</font>", string.Empty).Replace("</FONT>", string.Empty).Length > 0)
+                    if (stringFromI.ToLowerInvariant().Replace("</font>", string.Empty).Length > 0)
                     {
                         if (lastText.EndsWith(' ') && !sb.StartsWith(' '))
                         {
@@ -3794,7 +3794,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     {
                         SetLineJoin(parameter.LineJoin, p1);
                         g.DrawPath(p1, shadowPath);
-                    } 
+                    }
                 }
             }
 
