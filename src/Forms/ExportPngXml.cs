@@ -4458,15 +4458,10 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                         SubtitleFontSize = style.FontSize,
                         SubtitleFontBold = style.Bold
                     };
-                    var fontSize = (float)TextDraw.GetFontSize(mbp.SubtitleFontSize);
+                    var fontSize = (float)Math.Round(TextDraw.GetFontSize(mbp.SubtitleFontSize));
                     Font font = SetFont(mbp, fontSize);
                     SizeF textSize = MeasureString("Hj!", font);
-                    int lineHeight = (int)Math.Round(textSize.Height * 0.64f);
-                    if (fontSize < 30)
-                    {
-                        lineHeight = (int)Math.Round(textSize.Height * 0.69f);
-                    }
-
+                    int lineHeight = fontSize < 30 ? (int)Math.Round(textSize.Height * 0.69f) : (int)Math.Round(textSize.Height * 0.64f);
                     _lineHeights.Add(styleName, lineHeight);
                 }
             }
