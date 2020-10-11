@@ -3783,17 +3783,19 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     shadowAlpha = (int)Math.Round(shadowAlpha * 0.8);
                 }
 
-                var shadowPath = (GraphicsPath)path.Clone();
-                for (int k = 0; k < parameter.ShadowWidth; k++)
+                using (var shadowPath = (GraphicsPath)path.Clone())
                 {
-                    var translateMatrix = new Matrix();
-                    translateMatrix.Translate(1, 1);
-                    shadowPath.Transform(translateMatrix);
-
-                    using (var p1 = new Pen(new SolidBrush(Color.FromArgb(shadowAlpha, parameter.ShadowColor)), parameter.BorderWidth))
+                    for (int k = 0; k < parameter.ShadowWidth; k++)
                     {
-                        SetLineJoin(parameter.LineJoin, p1);
-                        g.DrawPath(p1, shadowPath);
+                        var translateMatrix = new Matrix();
+                        translateMatrix.Translate(1, 1);
+                        shadowPath.Transform(translateMatrix);
+
+                        using (var p1 = new Pen(new SolidBrush(Color.FromArgb(shadowAlpha, parameter.ShadowColor)), parameter.BorderWidth))
+                        {
+                            SetLineJoin(parameter.LineJoin, p1);
+                            g.DrawPath(p1, shadowPath);
+                        }
                     }
                 }
             }
