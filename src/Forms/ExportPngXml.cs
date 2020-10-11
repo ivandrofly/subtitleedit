@@ -3994,20 +3994,6 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                 }
                 checkBoxTransAntiAliase.Checked = Configuration.Settings.Tools.ExportVobAntiAliasingWithTransparency;
             }
-            else if (_exportType == ExportFormats.BluraySup || _exportType == ExportFormats.Dost || _exportType == ExportFormats.Fcp)
-            {
-                comboBoxSubtitleFontSize.SelectedIndex = 16;
-                int i = 0;
-                foreach (string item in comboBoxSubtitleFontSize.Items)
-                {
-                    if (item == Convert.ToInt32(_subtitleFontSize).ToString(CultureInfo.InvariantCulture))
-                    {
-                        comboBoxSubtitleFontSize.SelectedIndex = i;
-                        break;
-                    }
-                    i++;
-                }
-            }
             else
             {
                 comboBoxSubtitleFontSize.SelectedIndex = 16;
