@@ -3978,8 +3978,7 @@ $DROP=[DROPVALUE]" + Environment.NewLine + Environment.NewLine +
                     i++;
                 }
             }
-
-            if (_exportType == ExportFormats.VobSub)
+            else if (_exportType == ExportFormats.VobSub)
             {
                 comboBoxSubtitleFontSize.SelectedIndex = 7;
                 int i = 0;
