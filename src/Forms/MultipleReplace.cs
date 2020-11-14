@@ -12,6 +12,24 @@ namespace Nikse.SubtitleEdit.Forms
 {
     public sealed partial class MultipleReplace : PositionAndSizeForm
     {
+        private class MultipleReplaceResult
+        {
+            /// <summary>
+            /// Total fixed lines
+            /// </summary>
+            public int Count { get; set; }
+
+            /// <summary>
+            /// Fixed subtitle.
+            /// </summary>
+            public Subtitle Subtitle { get; set; }
+
+            /// <summary>
+            /// Itmes used to display fixes in listview
+            /// </summary>
+            public List<ListViewItem> ListViewItems { get; set; }
+        }
+
         internal const string Group = "Group";
         internal const string GroupName = "Name";
         internal const string GroupEnabled = "Enabled";
@@ -149,9 +167,20 @@ namespace Nikse.SubtitleEdit.Forms
 
         internal void RunFromBatch(Subtitle subtitle)
         {
-            Initialize(subtitle);
-            GeneratePreview();
-            SetDeleteIndices();
+            //Initialize(subtitle);
+            MultipleReplaceResult result = InvokeReplace(subtitle, true);
+            if (result.Subtitle?.Paragraphs.Count > 0)
+            {
+                for (int i = result.Subtitle.Paragraphs.Count - 1; i >= 0; i--)
+                {
+                    var p = result.Subtitle.Paragraphs[i];
+                    if (p.Text.Equals(string.Empty, StringComparison.OrdinalIgnoreCase))
+                    {
+                        subtitle.Paragraphs.RemoveAt(i);
+                    }
+                }
+            }
+            //SetDeleteIndices();
         }
 
         internal void RunFromBatch(Subtitle subtitle, IEnumerable<string> importFileNames)
@@ -237,9 +266,17 @@ namespace Nikse.SubtitleEdit.Forms
         {
             Cursor = Cursors.WaitCursor;
             FixedSubtitle = new Subtitle(_subtitle);
-            int fixedLines = 0;
+            MultipleReplaceResult result = InvokeReplace(FixedSubtitle, false);
             listViewFixes.BeginUpdate();
             listViewFixes.Items.Clear();
+            listViewFixes.Items.AddRange(result.ListViewItems.ToArray());
+            listViewFixes.EndUpdate();
+            groupBoxLinesFound.Text = string.Format(Configuration.Settings.Language.MultipleReplace.LinesFoundX, result.Count);
+            Cursor = Cursors.Default;
+        }
+
+        private MultipleReplaceResult InvokeReplace(Subtitle subtitle, bool isBatchMode)
+        {
             var replaceExpressions = new HashSet<ReplaceExpression>();
             foreach (var group in Configuration.Settings.MultipleSearchAndReplaceGroups)
             {
@@ -267,10 +304,11 @@ namespace Nikse.SubtitleEdit.Forms
                 }
             }
 
-            var fixes = new List<ListViewItem>();
-            for (var i = 0; i < _subtitle.Paragraphs.Count; i++)
+            // init only when not in batch mode
+            List<ListViewItem> listViewItemFixes = isBatchMode == false ? new List<ListViewItem>() : null;
+            for (var i = 0; i < subtitle.Paragraphs.Count; i++)
             {
-                Paragraph p = _subtitle.Paragraphs[i];
+                Paragraph p = subtitle.Paragraphs[i];
                 bool hit = false;
                 string newText = p.Text;
                 foreach (ReplaceExpression item in replaceExpressions)
@@ -309,16 +347,21 @@ namespace Nikse.SubtitleEdit.Forms
 
                 if (hit && newText != p.Text)
                 {
-                    fixedLines++;
-                    fixes.Add(MakePreviewListItem(p, newText));
-                    FixedSubtitle.Paragraphs[i].Text = newText;
+                    // generate view item when not in batch mode
+                    if (isBatchMode == false)
+                    {
+                        listViewItemFixes.Add(MakePreviewListItem(p, newText));
+                    }
+                    subtitle.Paragraphs[i].Text = newText;
                 }
             }
 
-            listViewFixes.Items.AddRange(fixes.ToArray());
-            listViewFixes.EndUpdate();
-            groupBoxLinesFound.Text = string.Format(Configuration.Settings.Language.MultipleReplace.LinesFoundX, fixedLines);
-            Cursor = Cursors.Default;
+            return new MultipleReplaceResult
+            {
+                Count = listViewItemFixes.Count,
+                Subtitle = subtitle,
+                ListViewItems = listViewItemFixes
+            };
         }
 
         private void AddToRulesListView(MultipleSearchAndReplaceSetting rule)

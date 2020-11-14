@@ -1173,7 +1173,7 @@ namespace Nikse.SubtitleEdit.Logic.CommandLineConvert
                     {
                         mr.RunFromBatch(sub, multipleReplaceImportFiles);
                         sub = mr.FixedSubtitle;
-                        sub.RemoveParagraphsByIndices(mr.DeleteIndices);
+                        //sub.RemoveParagraphsByIndices(mr.DeleteIndices);
                     }
                 }
 
