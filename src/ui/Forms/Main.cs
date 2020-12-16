@@ -32,6 +32,7 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Nikse.SubtitleEdit.Forms
@@ -159,8 +160,6 @@ namespace Nikse.SubtitleEdit.Forms
         private bool _doAutoBreakOnTextChanged = true;
         private readonly static object _syncUndo = new object();
         private string[] _dragAndDropFiles;
-        private readonly Timer _dragAndDropTimer = new Timer(); // to prevent locking windows explorer
-        private readonly Timer _dragAndDropVideoTimer = new Timer(); // to prevent locking windows explorer
         private long _labelNextTicks = -1;
         private bool _showBookmarkLabel = true;
         private ContextMenuStrip _bookmarkContextMenu;
@@ -13286,12 +13285,14 @@ namespace Nikse.SubtitleEdit.Forms
             }
         }
 
-        private void SubtitleListview1_DragDrop(object sender, DragEventArgs e)
+        private async void SubtitleListview1_DragDrop(object sender, DragEventArgs e)
         {
-            _dragAndDropFiles = (string[])e.Data.GetData(DataFormats.FileDrop);
+            // prevent locking windows explorer on large files
+            _dragAndDropFiles = await Task.Run(() => (string[])e.Data.GetData(DataFormats.FileDrop));
+
             if (_dragAndDropFiles.Length == 1)
             {
-                _dragAndDropTimer.Start();
+                DoSubtitleListview1Drop();
             }
             else
             {
@@ -13299,10 +13300,8 @@ namespace Nikse.SubtitleEdit.Forms
             }
         }
 
-        private void DoSubtitleListview1Drop(object sender, EventArgs e)
+        private void DoSubtitleListview1Drop()
         {
-            _dragAndDropTimer.Stop();
-
             if (ContinueNewOrExit())
             {
                 string fileName = _dragAndDropFiles[0];
@@ -14349,7 +14348,7 @@ namespace Nikse.SubtitleEdit.Forms
                     else
                     {
                         SubtitleListview1.Focus();
-                    } 
+                    }
                 }
                 else if (inSourceView)
                 {
@@ -20999,12 +20998,6 @@ namespace Nikse.SubtitleEdit.Forms
                 Configuration.Settings.General.LastCheckForUpdates = DateTime.Now;
             }
 
-            _dragAndDropTimer.Interval = 50;
-            _dragAndDropTimer.Tick += DoSubtitleListview1Drop;
-
-            _dragAndDropVideoTimer.Interval = 50;
-            _dragAndDropVideoTimer.Tick += DropVideoTick;
-
             if (_exitWhenLoaded)
             {
                 Application.Exit();
@@ -21911,15 +21904,10 @@ namespace Nikse.SubtitleEdit.Forms
             }
         }
 
-        private void DropVideoTick(object sender, EventArgs e)
+        private async void mediaPlayer_DragDrop(object sender, DragEventArgs e)
         {
-            _dragAndDropVideoTimer.Stop();
-            OpenVideo(VideoFileName);
-        }
-
-        private void mediaPlayer_DragDrop(object sender, DragEventArgs e)
-        {
-            var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            // prevent locking windows explorer on large files
+            var files = await Task.Run(() => (string[])e.Data.GetData(DataFormats.FileDrop));
             if (files.Length == 1)
             {
                 string fileName = files[0];
@@ -21939,7 +21927,7 @@ namespace Nikse.SubtitleEdit.Forms
                     }
 
                     VideoFileName = fileName;
-                    _dragAndDropVideoTimer.Start();
+                    OpenVideo(VideoFileName);
                 }
                 else
                 {
@@ -27348,7 +27336,7 @@ namespace Nikse.SubtitleEdit.Forms
         {
             openFileDialog1.Title = _language.OpenSubtitleVideoFile;
             openFileDialog1.FileName = string.Empty;
-            openFileDialog1.Filter = _language.VideoFiles + "|*.mkv;*.mks;*.mp4;*.ts;*.m2ts;*.mpeg;*.divx;*.avi"; 
+            openFileDialog1.Filter = _language.VideoFiles + "|*.mkv;*.mks;*.mp4;*.ts;*.m2ts;*.mpeg;*.divx;*.avi";
             if (openFileDialog1.ShowDialog(this) == DialogResult.OK)
             {
                 openFileDialog1.InitialDirectory = Path.GetDirectoryName(openFileDialog1.FileName);
