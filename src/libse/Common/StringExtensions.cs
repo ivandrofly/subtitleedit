@@ -246,9 +246,9 @@ namespace Nikse.SubtitleEdit.Core.Common
 
         public static string FixExtraSpaces(this string s)
         {
-            if (string.IsNullOrEmpty(s))
+            if (s == null)
             {
-                return s;
+                return null;
             }
 
             const char whiteSpace = ' ';
@@ -256,17 +256,23 @@ namespace Nikse.SubtitleEdit.Core.Common
             for (int i = s.Length - 1; i >= 0; i--)
             {
                 char ch = s[i];
-                if (k < 2)
+                if (ch == whiteSpace)
                 {
-                    if (ch == whiteSpace)
+                    if (k == -1)
                     {
                         k = i + 1;
                     }
+                    // end reached with some trailling whitespace. e.g: " foobar" => "foobar"
+                    else if (i == 0 && k - i > 0)
+                    {
+                        return s.Remove(i, k - i);
+                    }
                 }
-                else if (ch != whiteSpace)
+                else if (k > 0)
                 {
-                    // only keep white space if it doesn't succeed/precede CRLF
-                    int skipCount = (ch == '\n' || ch == '\r') || (k < s.Length && (s[k] == '\n' || s[k] == '\r')) ? 1 : 2;
+                    // only keep ONE white space if it doesn't succeed/precede CRLF, also remove pre/post white-space in text
+                    // e.g: foo\r\n bar => foo\r\nbar; foo  bar => foo bar;
+                    int skipCount = (ch == '\n' || ch == '\r') || (k < s.Length && (s[k] == '\n' || s[k] == '\r')) || k == s.Length ? 1 : 2;
 
                     // extra space found
                     if (k - (i + skipCount) >= 1)

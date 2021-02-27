@@ -461,24 +461,13 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
             return list;
         }
 
+
         public string FixOcrErrors(string input, int index, string lastLine, bool logSuggestions, AutoGuessLevel autoGuess)
         {
             var text = input;
-            while (text.Contains(Environment.NewLine + " ", StringComparison.Ordinal))
-            {
-                text = text.Replace(Environment.NewLine + " ", Environment.NewLine);
-            }
-
-            while (text.Contains(" " + Environment.NewLine, StringComparison.Ordinal))
-            {
-                text = text.Replace(" " + Environment.NewLine, Environment.NewLine);
-            }
-
-            while (text.Contains(Environment.NewLine + Environment.NewLine, StringComparison.Ordinal))
-            {
-                text = text.Replace(Environment.NewLine + Environment.NewLine, Environment.NewLine);
-            }
-
+            text = Utilities.RemoveLineBreakPostWhiteSpace(text);
+            text = Utilities.RemoveLineBreakPretWhiteSpace(text);
+            text = Utilities.RemoveRecursiveLineBreak(text);
             text = text.Trim();
 
             // Try to prevent resizing when fixing Ocr-hardcoded.
