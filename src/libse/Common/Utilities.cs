@@ -1410,7 +1410,7 @@ namespace Nikse.SubtitleEdit.Core.Common
 
             if (j != len - endLen)
             {
-                if (j + 1 - endTag.Length < 0 || text[j] != endTag[endTag.Length - 1]
+                if (j + 1 - endTag.Length < 0 || text[j] != endTag[^1]
                     || !text.Substring((j + 1) - endTag.Length, endTag.Length).Equals(endTag))
                 {
                     return false;
