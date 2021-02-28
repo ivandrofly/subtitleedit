@@ -754,7 +754,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 while (fontCloseIdx >= 30 - 7)
                 {
                     string preColor = string.Empty;
-                    int preColorIdx = s.LastIndexOf("<font ", StringComparison.Ordinal);
+                    int preColorIdx = s.LastIndexOf("<font ", fontCloseIdx, StringComparison.Ordinal);
                     if (preColorIdx > 0)
                     {
                         preColor = GetColorFromIndex(s, preColorIdx);
@@ -847,11 +847,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return lines[0];
             }
 
-            var singleLine = string.Join(" ", lines);
-            while (singleLine.Contains("  "))
-            {
-                singleLine = singleLine.Replace("  ", " ");
-            }
+            var singleLine = string.Join(" ", lines).FixExtraSpaces();
 
             if (singleLine.Contains("</")) // Fix tag
             {
@@ -1370,35 +1366,57 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return false;
             }
 
-            while (text.Contains("  "))
+            text = text.FixExtraSpaces();
+
+            int len = text.Length;
+            if (text.StartsWith('-'))
             {
-                text = text.Replace("  ", " ");
+                int i = 1;
+                while (i < len && (text[i] == '.' || text[i] == ' '))
+                {
+                    i++;
+                }
+
+                // unexpected end index
+                if (i == len)
+                {
+                    return false;
+                }
+
+                // check 1st char
+                if ((text[i] != startTag[0]) || (i + startTag.Length > len) || !text.Substring(i, startTag.Length).Equals(startTag))
+                {
+                    return false;
+                }
+            }
+            else if (!text.StartsWith(startTag, StringComparison.Ordinal))
+            {
+                return false;
             }
 
-            var s1 = "- " + startTag;
-            var s2 = "-" + startTag;
-            var s3 = "- ..." + startTag;
-            var s4 = "- " + startTag + "..."; // - <i>...
-
-            var e1 = endTag + ".";
-            var e2 = endTag + "!";
-            var e3 = endTag + "?";
-            var e4 = endTag + "...";
-            var e5 = endTag + "-";
-
-            bool isStart = false;
-            bool isEnd = false;
-            if (text.StartsWith(startTag, StringComparison.Ordinal) || text.StartsWith(s1, StringComparison.Ordinal) || text.StartsWith(s2, StringComparison.Ordinal) || text.StartsWith(s3, StringComparison.Ordinal) || text.StartsWith(s4, StringComparison.Ordinal))
+            int endLen = endTag.Length;
+            string vals = "?!-.";
+            if (len - endLen < 0 || (text[len - endLen] != endTag[0] && !vals.Contains(text[len - endLen])))
             {
-                isStart = true;
+                return false;
             }
 
-            if (text.EndsWith(endTag, StringComparison.Ordinal) || text.EndsWith(e1, StringComparison.Ordinal) || text.EndsWith(e2, StringComparison.Ordinal) || text.EndsWith(e3, StringComparison.Ordinal) || text.EndsWith(e4, StringComparison.Ordinal) || text.EndsWith(e5, StringComparison.Ordinal))
+            int j = len - endLen;
+
+            while (j > 0 && vals.Contains(text[j]))
             {
-                isEnd = true;
+                j--;
             }
 
-            return isStart && isEnd;
+            if (j != len - endLen)
+            {
+                if (j + 1 - endTag.Length < 0 || text[j] != endTag[endTag.Length - 1] || !text.Substring((j + 1) - endTag.Length, endTag.Length).Equals(endTag))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public static Paragraph GetOriginalParagraph(int index, Paragraph paragraph, List<Paragraph> originalParagraphs)
