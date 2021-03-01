@@ -497,20 +497,15 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return false;
             }
 
-            var allLower = text.ToLowerInvariant();
-            if (allLower.StartsWith("http://", StringComparison.Ordinal) || allLower.StartsWith("https://", StringComparison.Ordinal) ||
-                allLower.StartsWith("www.", StringComparison.Ordinal) || allLower.EndsWith(".org", StringComparison.Ordinal) ||
-                allLower.EndsWith(".com", StringComparison.Ordinal) || allLower.EndsWith(".net", StringComparison.Ordinal))
+            //var allLower = text.ToLowerInvariant();
+            if (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                text.StartsWith("www.", StringComparison.OrdinalIgnoreCase) || text.EndsWith(".org", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith(".com", StringComparison.OrdinalIgnoreCase) || text.EndsWith(".net", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
 
-            if (allLower.Contains(".org/") || allLower.Contains(".com/") || allLower.Contains(".net/"))
-            {
-                return true;
-            }
-
-            return false;
+            return text.Contains(".org/", StringComparison.OrdinalIgnoreCase) || text.Contains(".com/", StringComparison.OrdinalIgnoreCase) || text.Contains(".net/", StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool StartsWithUrl(string text)
