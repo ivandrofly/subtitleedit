@@ -156,7 +156,7 @@ namespace Test.Core
         {
             string input = "Hallo world!  ";
             var res = input.FixExtraSpaces();
-            Assert.AreEqual("Hallo world! ", res);
+            Assert.AreEqual("Hallo world!", res);
         }
 
         [TestMethod]
@@ -182,6 +182,15 @@ namespace Test.Core
             string input = "a" + Environment.NewLine + "   b";
             var res = input.FixExtraSpaces();
             Assert.AreEqual("a" + Environment.NewLine + "b", res);
+        }
+
+
+        [TestMethod]
+        public void FixExtraSpaces7()
+        {
+            string input = "  Hallo world!  ";
+            var res = input.FixExtraSpaces();
+            Assert.AreEqual("Hallo world!", res);
         }
 
         [TestMethod]

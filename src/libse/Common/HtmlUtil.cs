@@ -497,7 +497,6 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return false;
             }
 
-            //var allLower = text.ToLowerInvariant();
             if (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
                 text.StartsWith("www.", StringComparison.OrdinalIgnoreCase) || text.EndsWith(".org", StringComparison.OrdinalIgnoreCase) ||
                 text.EndsWith(".com", StringComparison.OrdinalIgnoreCase) || text.EndsWith(".net", StringComparison.OrdinalIgnoreCase))
@@ -532,6 +531,55 @@ namespace Nikse.SubtitleEdit.Core.Common
             {
                 return input;
             }
+
+            int[] indexToLower = new int[input.Length - 2];
+            char[] procChars = new char[input.Length];
+            int j = -1;
+            int k = 0;
+            for (int i = input.Length - 1; i >= 0; i--)
+            {
+                var ch = input[i];
+
+                if (ch == '>')
+                {
+                    j = i;
+                }
+                else if (ch == '<' && j > 0)
+                {
+                    // tags like <i>, <b>... found
+                    if (j - i == 2 && (input[i + 1] == 'I' || input[i + 1] == 'B' || input[i + 1] == 'U'))
+                    {
+                        //indexToLower[k++] = i + 1;
+                    }
+                    // tags like </i>
+                    else if (j - i == 3 && input[i + 1] == '/' && (input[i + 2] == 'I' || input[i + 2] == 'B' || input[i + 2] == 'U'))
+                    {
+                    }
+                    // <font...> and </font>
+                    else if (j - i >= 6 && input[i + 1] == '/')
+                    {
+                        int l = j - 1;
+                        // remarks: we could have just check from 'f' to 't' but font tag also support name color. e.g: blue, white...
+                        while (l > i + 1 && (input[l] >= 'A' && input[l] <= 'Z') &&
+                            (input[l] == '"' || input[l] == '#' || input[l] == '=' || (input[l] >= '0' && input[l] <= '9'))) // note: the color hex range is also included /* char.IsUpper(input[l])*/
+                        {
+                            l--;
+                        }
+
+                        // all uppercase font tags
+                        if (l == i + 1)
+                        {
+
+                        }
+                    }
+                }
+                else if (j == -1)
+                {
+                    //procChars[i] = ch;
+                }
+            }
+
+            //return new string(procChars)
 
             var text = input;
             var idx = text.IndexOfAny(UppercaseTags, StringComparison.Ordinal);

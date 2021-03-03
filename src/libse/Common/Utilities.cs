@@ -636,41 +636,168 @@ namespace Nikse.SubtitleEdit.Core.Common
             return s.TrimEnd();
         }
 
+        public static string RemoveLineBreakPostWhiteSpace(string input)
+        {
+            string text = input;
+            char NewLineChar = Environment.NewLine[Environment.NewLine.Length - 1];
+            int j = -1;
+            for (int i = text.Length - 1; i >= 0; i--)
+            {
+                var ch = text[i];
+                // look for white space
+                if (ch == ' ')
+                {
+                    // if j* doens't store any position yet, update j*
+                    if (j == -1)
+                    {
+                        j = i;
+                    }
+                }
+                // if we found a newline and our recall variable j* has a value, remove everything after newline char
+                else if (ch == NewLineChar && j != -1)
+                {
+                    // remove white spaces
+                    text = text.Remove(i + 1, j + 1 - (i + 1));
+                    j = -1; // reset
+                }
+                else
+                {
+                    j = -1; // reset
+                }
+            }
+
+            return text;
+        }
+
+        public static string RemoveLineBreakPreWhiteSpace(string input)
+        {
+            char NewLineChar = Environment.NewLine.Length == 2 ? '\r' : '\n';
+            var text = input;
+            for (int i = text.Length - 1; i >= 0; i--)
+            {
+                var ch = text[i];
+                // find newline character
+                if (ch == NewLineChar)
+                {
+                    // store index of new line
+                    int j = i;
+
+                    // white previous character is white-space, remove back once
+                    while (i - 1 >= 0 && text[i - 1] == ' ')
+                    {
+                        i--;
+                    }
+
+                    // if the there are more than one white-space prefixed with newline character, remove it!
+                    if (j - i > 0)
+                    {
+                        text = text.Remove(i, j - i);
+                    }
+                }
+            }
+            return text;
+        }
+
+        public static string RemoveRecursiveLineBreak(string input)
+        {
+            int newLineLen = Environment.NewLine.Length;
+            string text = input;
+            int j = -1;
+            for (int i = text.Length - 1; i >= 0; i--)
+            {
+                var ch = text[i];
+                if (ch == '\r' || ch == '\n')
+                {
+                    if (ch == '\n' && j == -1)
+                    {
+                        j = i;
+                    }
+                }
+                // foobar\r\nfoobar
+                else if ((j + 1) - (i + 1) >= newLineLen * 2)
+                {
+                    text = text.Remove(i + 1 + newLineLen, j + 1 - (i + 1 + newLineLen));
+                    j = -1;
+                }
+                else
+                {
+                    j = -1;
+                }
+            }
+
+            return text;
+        }
+
         public static string RemoveLineBreaks(string input)
         {
             var s = HtmlUtil.FixUpperTags(input);
+            if (!input.Contains(Environment.NewLine))
+            {
+                return s;
+            }
 
-            s = s.Replace("</i> " + Environment.NewLine + "<i>", Environment.NewLine);
-            s = s.Replace("</i>" + Environment.NewLine + " <i>", Environment.NewLine);
+            s = RemoveLineBreakPostWhiteSpace(s);
+            s = RemoveLineBreakPreWhiteSpace(s);
+
             s = s.Replace("</i>" + Environment.NewLine + "<i>", Environment.NewLine);
+            s = s.Replace("</b>" + Environment.NewLine + "<b>", Environment.NewLine);
+            s = s.Replace("</u>" + Environment.NewLine + "<u>", Environment.NewLine);
 
-            s = s.Replace(Environment.NewLine + " </i>", "</i>" + Environment.NewLine);
-            s = s.Replace(Environment.NewLine + " </b>", "</b>" + Environment.NewLine);
-            s = s.Replace(Environment.NewLine + " </u>", "</u>" + Environment.NewLine);
-            s = s.Replace(Environment.NewLine + " </font>", "</font>" + Environment.NewLine);
+            // "<font color="#008000">a</font>"
+            const int MinLenConstraint = 30;
+            // candidate: <font color="#008000">a</font>\r\n<font color="#008000">b</font>
+            if (s.Length >= 2 * MinLenConstraint + Environment.NewLine.Length)
+            {
+                string fontClose = "</font>" + Environment.NewLine + "<font ";
+                int fontCloseIdx = s.LastIndexOf(fontClose, StringComparison.Ordinal);
+                while (fontCloseIdx >= 30 - 7)
+                {
+                    string preColor = string.Empty;
+                    int preColorIdx = s.LastIndexOf("<font ", fontCloseIdx, StringComparison.Ordinal);
+                    // get pre color
+                    if (preColorIdx > 0)
+                    {
+                        preColor = GetColorFromIndex(s, preColorIdx);
+                    }
 
-            s = s.Replace(" " + Environment.NewLine + "</i>", "</i>" + Environment.NewLine);
-            s = s.Replace(" " + Environment.NewLine + "</b>", "</b>" + Environment.NewLine);
-            s = s.Replace(" " + Environment.NewLine + "</u>", "</u>" + Environment.NewLine);
-            s = s.Replace(" " + Environment.NewLine + "</font>", "</font>" + Environment.NewLine);
+                    // get post color
+                    if (preColor.Length > 0)
+                    {
+                        string postColor = GetColorFromIndex(s, fontCloseIdx + 7 + Environment.NewLine.Length);
+                        // font tag found with same color
+                        if (postColor.Equals(preColor, StringComparison.OrdinalIgnoreCase)) // #008000 == #008000
+                        {
+                            // remove all </font>\r\n<font...>
+                            int postFontIfx = s.IndexOf('>', fontCloseIdx + 7 + Environment.NewLine.Length + 7);
+                            s = s.Remove(fontCloseIdx, postFontIfx + 1 - fontCloseIdx).Insert(fontCloseIdx, Environment.NewLine);
+                        }
+                    }
+
+                    fontCloseIdx = s.LastIndexOf(fontClose, fontCloseIdx);
+                }
+            }
 
             s = s.Replace(Environment.NewLine + "</i>", "</i>" + Environment.NewLine);
             s = s.Replace(Environment.NewLine + "</b>", "</b>" + Environment.NewLine);
             s = s.Replace(Environment.NewLine + "</u>", "</u>" + Environment.NewLine);
             s = s.Replace(Environment.NewLine + "</font>", "</font>" + Environment.NewLine);
 
-            while (s.Contains(" " + Environment.NewLine))
-            {
-                s = s.Replace(" " + Environment.NewLine, Environment.NewLine);
-            }
+            //s = RemoveRecursiveLineBreak(s);
+            return s.Replace(Environment.NewLine, " ").FixExtraSpaces();
+        }
 
-            while (s.Contains(Environment.NewLine + " "))
+        private static string GetColorFromIndex(string s, int fontIndex)
+        {
+            int colorIdx = s.IndexOf("color=\"", fontIndex + 6, StringComparison.Ordinal);
+            if (colorIdx > fontIndex)
             {
-                s = s.Replace(Environment.NewLine + " ", Environment.NewLine);
+                int endColorIdx = s.IndexOf('"', colorIdx + 7);
+                if (endColorIdx > colorIdx)
+                {
+                    return s.Substring(colorIdx + 7, endColorIdx - (colorIdx + 7));
+                }
             }
-
-            s = s.Replace(Environment.NewLine, " ");
-            return s.Trim();
+            return string.Empty;
         }
 
         /// <summary>
@@ -720,11 +847,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return lines[0];
             }
 
-            var singleLine = string.Join(" ", lines);
-            while (singleLine.Contains("  "))
-            {
-                singleLine = singleLine.Replace("  ", " ");
-            }
+            var singleLine = string.Join(" ", lines).FixExtraSpaces();
 
             if (singleLine.Contains("</")) // Fix tag
             {
@@ -1243,35 +1366,58 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return false;
             }
 
-            while (text.Contains("  "))
+            text = text.FixExtraSpaces();
+
+            int len = text.Length;
+            if (text.StartsWith('-'))
             {
-                text = text.Replace("  ", " ");
+                int i = 1;
+                while (i < len && (text[i] == '.' || text[i] == ' '))
+                {
+                    i++;
+                }
+
+                // unexpected end index
+                if (i == len)
+                {
+                    return false;
+                }
+
+                // check 1st char
+                if ((text[i] != startTag[0]) || (i + startTag.Length > len) || !text.Substring(i, startTag.Length).Equals(startTag))
+                {
+                    return false;
+                }
+            }
+            else if (!text.StartsWith(startTag, StringComparison.Ordinal))
+            {
+                return false;
             }
 
-            var s1 = "- " + startTag;
-            var s2 = "-" + startTag;
-            var s3 = "- ..." + startTag;
-            var s4 = "- " + startTag + "..."; // - <i>...
-
-            var e1 = endTag + ".";
-            var e2 = endTag + "!";
-            var e3 = endTag + "?";
-            var e4 = endTag + "...";
-            var e5 = endTag + "-";
-
-            bool isStart = false;
-            bool isEnd = false;
-            if (text.StartsWith(startTag, StringComparison.Ordinal) || text.StartsWith(s1, StringComparison.Ordinal) || text.StartsWith(s2, StringComparison.Ordinal) || text.StartsWith(s3, StringComparison.Ordinal) || text.StartsWith(s4, StringComparison.Ordinal))
+            int endLen = endTag.Length;
+            string vals = "?!-.";
+            if (len - endLen < 0 || (text[len - endLen] != endTag[0] && !vals.Contains(text[len - endLen])))
             {
-                isStart = true;
+                return false;
             }
 
-            if (text.EndsWith(endTag, StringComparison.Ordinal) || text.EndsWith(e1, StringComparison.Ordinal) || text.EndsWith(e2, StringComparison.Ordinal) || text.EndsWith(e3, StringComparison.Ordinal) || text.EndsWith(e4, StringComparison.Ordinal) || text.EndsWith(e5, StringComparison.Ordinal))
+            int j = len - endLen;
+
+            while (j > 0 && vals.Contains(text[j]))
             {
-                isEnd = true;
+                j--;
             }
 
-            return isStart && isEnd;
+            if (j != len - endLen)
+            {
+                if (j + 1 - endTag.Length < 0 || text[j] != endTag[endTag.Length - 1]
+                    || !text.Substring((j + 1) - endTag.Length, endTag.Length).Equals(endTag))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public static Paragraph GetOriginalParagraph(int index, Paragraph paragraph, List<Paragraph> originalParagraphs)

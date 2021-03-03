@@ -461,24 +461,13 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
             return list;
         }
 
+
         public string FixOcrErrors(string input, int index, string lastLine, bool logSuggestions, AutoGuessLevel autoGuess)
         {
             var text = input;
-            while (text.Contains(Environment.NewLine + " ", StringComparison.Ordinal))
-            {
-                text = text.Replace(Environment.NewLine + " ", Environment.NewLine);
-            }
-
-            while (text.Contains(" " + Environment.NewLine, StringComparison.Ordinal))
-            {
-                text = text.Replace(" " + Environment.NewLine, Environment.NewLine);
-            }
-
-            while (text.Contains(Environment.NewLine + Environment.NewLine, StringComparison.Ordinal))
-            {
-                text = text.Replace(Environment.NewLine + Environment.NewLine, Environment.NewLine);
-            }
-
+            text = Utilities.RemoveLineBreakPostWhiteSpace(text);
+            text = Utilities.RemoveLineBreakPreWhiteSpace(text);
+            text = Utilities.RemoveRecursiveLineBreak(text);
             text = text.Trim();
 
             // Try to prevent resizing when fixing Ocr-hardcoded.
@@ -499,14 +488,62 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
                     text = "." + text;
                 }
 
-                text = text.Replace("<i>-</i>", "-");
-                text = text.Replace("<i>- </i>", "- ");
-                text = text.Replace("<i> - </i>", "- ");
-                text = text.Replace("<i> -</i>", "- ");
-                text = text.Replace("- ", "-  ");
-                text = text.Replace("<i>a</i>", "a");
-                text = text.Replace("<i>.</i>", ".");
-                text = text.TrimStart();
+                // check for tag presence
+                if (text.Contains("</", StringComparison.Ordinal))
+                {
+                    //text = text.Replace("<i>-</i>", "-");
+                    //text = text.Replace("<i>- </i>", "- ");
+                    //text = text.Replace("<i> - </i>", "- ");
+                    //text = text.Replace("<i> -</i>", "- ");
+
+                    int j = -1;
+                    for (int i = text.Length - 1; i >= 0; i--)
+                    {
+                        var ch = text[i];
+
+                        // find closing tag
+                        if (ch == '<' && i + 1 < text.Length && text[i + 1] == '/')
+                        {
+                            j = i;
+                        }
+                        // we have a closing tag and another potential open tag is found
+                        else if (j > 4 && ch == '>' && i - 2 >= 0)
+                        {
+                            int k = j - 1;
+
+                            // cound white-space and hyphen
+                            while (k > i && (text[k] == '-' || text[k] == ' '))
+                            {
+                                k--;
+                            }
+
+                            // remove everything in between if k = i and insert "- "
+                            if (k == i)
+                            {
+                                int openTagStartIdx = text.LastIndexOf('<', i - 1);
+
+                                // open tag start found
+                                if (openTagStartIdx >= 0)
+                                {
+                                    int tagCloseEndIdx = text.IndexOf('>', j + 1);
+
+                                    if (tagCloseEndIdx > j + 1)
+                                    {
+                                        // <i>- </i> => "- "
+                                        text = text.Remove(openTagStartIdx, tagCloseEndIdx + 1 - openTagStartIdx).Insert(openTagStartIdx, "- ");
+                                    }
+                                }
+                            }
+
+                            j = -1; // reset j
+                        }
+                    }
+
+                    //text = text.Replace("- ", "-  ");
+                    text = text.Replace("<i>a</i>", "a");
+                    text = text.Replace("<i>.</i>", ".");
+                    text = text.TrimStart();
+                }
 
                 int len = text.Length;
                 for (int i = 0; i < len; i++)
@@ -547,8 +584,7 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
             text = FixCommonOcrLineErrors(text, lastLine);
 
             // check words split by only space and new line (as other split chars might by a part of from-replace-string, like "\/\/e're" contains slash)
-            sb = new StringBuilder();
-            var word = new StringBuilder();
+            var word = new StringBuilder(text.Length);
             string lastWord = null;
             for (int i = 0; i < text.Length; i++)
             {
@@ -574,8 +610,8 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
 
             // check words split by many chars like "()/-" etc.
             text = sb.ToString();
-            sb = new StringBuilder();
-            word = new StringBuilder();
+            sb.Clear();
+            word.Clear();
             lastWord = null;
             for (int i = 0; i < text.Length; i++)
             {
@@ -800,9 +836,10 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
         private string ReplaceWordsBeforeLineFixes(string text)
         {
             string lastWord = null;
-            var sb = new StringBuilder();
-            var word = new StringBuilder();
-            for (int i = 0; i < text.Length; i++)
+            int len = text.Length;
+            var sb = new StringBuilder(len);
+            var word = new StringBuilder(len);
+            for (int i = 0; i < len; i++)
             {
                 if (_expectedCharsNoComma.Contains(text[i])) // fix e.g. "don,t"
                 {
@@ -854,8 +891,8 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
 
             lastWord = null;
             text = sb.ToString();
-            sb = new StringBuilder();
-            word = new StringBuilder();
+            sb.Clear();
+            word.Clear();
             for (int i = 0; i < text.Length; i++)
             {
                 if (_expectedChars.Contains(text[i])) // removed $
@@ -905,9 +942,11 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
                     text = ("- " + text.Remove(0, 1)).Replace("  ", " ");
                 }
 
-                text = text.Replace(Environment.NewLine + "~", Environment.NewLine + "- ").Replace("  ", " ");
-
-                if (text.Length < 10 && text.Length > 4 && !text.Contains(Environment.NewLine, StringComparison.Ordinal) && text.StartsWith("II", StringComparison.Ordinal) && text.EndsWith("II", StringComparison.Ordinal))
+                if (text.Contains(Environment.NewLine, StringComparison.Ordinal))
+                {
+                    text = text.Replace(Environment.NewLine + "~", Environment.NewLine + "- ").Replace("  ", " ");
+                }
+                else if (text.Length < 10 && text.Length > 4 && text.StartsWith("II", StringComparison.Ordinal) && text.EndsWith("II", StringComparison.Ordinal))
                 {
                     text = "\"" + text.Substring(2, text.Length - 4) + "\"";
                 }
@@ -1362,7 +1401,7 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
             foreach (var w in HtmlUtil.RemoveHtmlTags(line, true).Split(' ', '\r', '\n'))
             {
                 var word = w.Trim(trimChars);
-                if (word.Length > 1 && word == word.ToUpperInvariant())
+                if (word.Length > 1 && word == word.ToUpper())
                 {
                     hasAllUpperWord = true;
                     break;
@@ -1474,14 +1513,7 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
                         var trimmed = word.Trim('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ',', '،', '؟', '»');
                         if (trimmed != word)
                         {
-                            if (_userWordList.Contains(trimmed))
-                            {
-                                correct = true;
-                            }
-                            else
-                            {
-                                correct = DoSpell(trimmed);
-                            }
+                            correct = _userWordList.Contains(trimmed) || DoSpell(trimmed);
                         }
                     }
 

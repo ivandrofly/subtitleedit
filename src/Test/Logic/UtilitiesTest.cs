@@ -721,6 +721,34 @@ namespace Test.Logic
         }
 
         [TestMethod]
+        public void RemoveLineBreaks6()
+        {
+            string result = Utilities.RemoveLineBreaks("<font color=\"#008000\">a</font>\r\n<font color=\"#008000\">b</font>");
+            Assert.AreEqual("<font color=\"#008000\">a b</font>", result);
+        }
+
+        [TestMethod]
+        public void RemoveRecursiveLineBreakTest1()
+        {
+            string result = Utilities.RemoveRecursiveLineBreak("foobar\r\n\r\nfoobar");
+            Assert.AreEqual("foobar\r\nfoobar", result);
+        }
+
+        [TestMethod]
+        public void RemoveRecursiveLineBreakTest2()
+        {
+            string result = Utilities.RemoveRecursiveLineBreak("foobar\n\nfoobar");
+            Assert.AreEqual("foobar\n\nfoobar", result);
+        }
+
+        [TestMethod]
+        public void RemoveRecursiveLineBreakTest3()
+        {
+            string result = Utilities.RemoveRecursiveLineBreak("foobar\nfoobar");
+            Assert.AreEqual("foobar\nfoobar", result);
+        }
+
+        [TestMethod]
         public void IsValidRegexOk1()
         {
             Assert.IsTrue(RegexUtils.IsValidRegex(@"^(?![\s\S])"));

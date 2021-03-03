@@ -502,6 +502,18 @@ namespace Test.FixCommonErrors
         }
 
         [TestMethod]
+        public void FixOcrErrorsViaHardcodedRules3()
+        {
+            using (var form = new Nikse.SubtitleEdit.Forms.FixCommonErrors())
+            {
+                Configuration.Settings.Tools.OcrFixUseHardcodedRules = true;
+                const string input = "<i>-     </i>Foobar!";
+                var ofe = new Nikse.SubtitleEdit.Logic.Ocr.OcrFixEngine("eng", "not there", form);
+                Assert.AreEqual("- Foobar!", ofe.FixOcrErrors(input, 1, "Closed!", false, Nikse.SubtitleEdit.Logic.Ocr.OcrFixEngine.AutoGuessLevel.Cautious));
+            }
+        }
+
+        [TestMethod]
         public void FixOcrErrorsViaDoNotFixToUpper()
         {
             using (var form = new Nikse.SubtitleEdit.Forms.FixCommonErrors())

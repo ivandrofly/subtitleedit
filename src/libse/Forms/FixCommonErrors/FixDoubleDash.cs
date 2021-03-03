@@ -11,6 +11,33 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             public static string FixDoubleDash { get; set; } = "Fix '--' -> '...'";
         }
 
+        private static string FixRecursiveDash(string text)
+        {
+            int j = -1;
+            for (int i = text.Length - 1; i >= 0; i--)
+            {
+                char ch = text[i];
+                if (ch == '-')
+                {
+                    if (j == -1)
+                    {
+                        j = i;
+                    }
+                }
+                else if (i + 3 <= j)
+                {
+                    text = text.Remove(i + 3, j + 1 - (i + 3));
+                    j = -1;
+                }
+                else
+                {
+                    j = -1;
+                }
+            }
+
+            return text;
+        }
+
         public void Fix(Subtitle subtitle, IFixCallbacks callbacks)
         {
             int fixCount = 0;
@@ -22,24 +49,22 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     string text = p.Text;
                     string oldText = p.Text;
 
-                    while (text.Contains("---", StringComparison.Ordinal))
-                    {
-                        text = text.Replace("---", "--");
-                    }
-
                     if (text.Contains("--", StringComparison.Ordinal))
                     {
+                        text = FixRecursiveDash(text); // foo---bar => foo--bar
+
                         text = text.Replace("--", "... ");
                         text = text.Replace("...  ", "... ");
                         text = text.Replace(" ...", "...");
                         text = text.TrimEnd();
-                        text = text.Replace("... " + Environment.NewLine, "..." + Environment.NewLine);
+                        //text = text.Replace("... " + Environment.NewLine, "..." + Environment.NewLine);
                         text = text.Replace("... </", "...</"); // </i>, </font>...
                         text = text.Replace("... ?", "...?");
                         text = text.Replace("... !", "...!");
 
                         if (text.IndexOf(Environment.NewLine, StringComparison.Ordinal) > 1)
                         {
+                            text = text.Replace("... " + Environment.NewLine, "..." + Environment.NewLine);
                             var lines = text.SplitToLines();
                             for (int k = 0; k < lines.Count; k++)
                             {

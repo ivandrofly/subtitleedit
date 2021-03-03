@@ -274,13 +274,13 @@ namespace Nikse.SubtitleEdit.Core.Dictionaries
                 return false;
             }
 
-            var text = input.Replace(Environment.NewLine, " ");
-            text = text.FixExtraSpaces();
-
             if (_namesMultiList.Contains(word))
             {
                 return true;
             }
+
+            var text = Utilities.UnbreakLine(input);
+
             foreach (string multiWordName in _namesMultiList)
             {
                 if (text.FastIndexOf(multiWordName) >= 0)

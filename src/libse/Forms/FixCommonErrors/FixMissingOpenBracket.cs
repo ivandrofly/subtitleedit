@@ -11,57 +11,52 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             public static string FixMissingOpenBracket { get; set; } = "Fix missing [ in line";
         }
 
-        private static string Fix(string text, string openB)
+        private static string Fix(string text, string openB, int closeIdx)
         {
-            string pre = string.Empty;
-            string closeB = openB == "(" ? ")" : "]";
-
-            if (text.Contains(" " + closeB))
+            if (closeIdx - 1 >= 0)
             {
-                openB = openB + " ";
+                return text;
             }
 
-            do
+            bool suffixWhiteSpace = false;
+            if (text[closeIdx - 1] == ' ')
             {
-                if (text.Length > 1 && text.StartsWith('-'))
-                {
-                    pre += "- ";
-                    if (text[1] == ' ')
-                    {
-                        text = text.Substring(2);
-                    }
-                    else
-                    {
-                        text = text.Substring(1);
-                    }
-                }
-                if (text.Length > 3 && text.StartsWith("<i>", StringComparison.OrdinalIgnoreCase))
-                {
-                    pre += "<i>";
-                    if (text[3] == ' ')
-                    {
-                        text = text.Substring(4);
-                    }
-                    else
-                    {
-                        text = text.Substring(3);
-                    }
-                }
-                if (text.Length > 1 && (text[0] == ' ' || text[0] == '.'))
-                {
-                    pre += text[0] == '.' ? '.' : ' ';
-                    text = text.Substring(1);
-                    while (text.Length > 0 && text[0] == '.')
-                    {
-                        pre += ".";
-                        text = text.Substring(1);
-                    }
-                    text = text.TrimStart(' ');
-                }
-            } while (text.StartsWith("<i>", StringComparison.Ordinal) || text.StartsWith('-'));
+                suffixWhiteSpace = true;
+            }
 
-            text = pre + openB + text;
-            return text;
+            int i = 0;
+            while (text[i] == '-' || (text[i] == '<' && text.Substring(i).LineStartsWithHtmlTag(true, true)))
+            {
+                // html tag
+                if (text[i] == '<')
+                {
+                    // find tag close idx + 1
+                    i = text.IndexOf('>', i + 2) + 1;
+
+                    // if after the tag there is a dash (which represent dialog skip that with it's white-space if also present)
+                    if (i < closeIdx && text[i] == '-')
+                    {
+                        i += i + 1 < closeIdx && text[i + 1] == ' ' ? 2 : 1;
+                    }
+                    // after tag skip dash or any white-space
+                    while (i < closeIdx && text[i] == ' ' || text[i] == '.')
+                    {
+                        i++;
+                    }
+                }
+                else
+                {
+                    i++; // skip dash only
+                }
+            }
+
+            // invalid close bracket, take it out!
+            if (i >= closeIdx)
+            {
+                text = text.Remove(closeIdx, 1).FixExtraSpaces();
+            }
+
+            return text.Insert(i, suffixWhiteSpace ? openB + " " : openB);
         }
 
         public void Fix(Subtitle subtitle, IFixCallbacks callbacks)
@@ -80,7 +75,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     var closeIdx = p.Text.IndexOf(')');
                     if (closeIdx >= 0 && (closeIdx < openIdx || openIdx < 0))
                     {
-                        p.Text = Fix(p.Text, "(");
+                        p.Text = Fix(p.Text, "(", closeIdx);
                         hit = true;
                     }
 
@@ -88,7 +83,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     closeIdx = p.Text.IndexOf(']');
                     if (closeIdx >= 0 && (closeIdx < openIdx || openIdx < 0))
                     {
-                        p.Text = Fix(p.Text, "[");
+                        p.Text = Fix(p.Text, "[", closeIdx);
                         hit = true;
                     }
 

@@ -89,6 +89,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                 {
                     int j = i;
                     // Fix recursive dot after ?/!
+                    // todo:!
                     while (j + 1 < input.Length && input[j + 1] == '.')
                     {
                         j++;
