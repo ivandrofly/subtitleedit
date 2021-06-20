@@ -121,7 +121,7 @@ namespace Nikse.SubtitleEdit.Forms
                     var textNoTags = HtmlUtil.RemoveHtmlTags(text, true);
                     
                     if (!IsAllUpper(textNoTags) &&
-                        text?.Contains(name, StringComparison.OrdinalIgnoreCase) == true && !IsAllUpper(name))
+                        textNoTags?.Contains(name, StringComparison.OrdinalIgnoreCase) == true && !IsAllUpper(name))
                     {
                         var st = new StrippableText(text);
                         st.FixCasing(new List<string> { name }, true, false, false, string.Empty);
