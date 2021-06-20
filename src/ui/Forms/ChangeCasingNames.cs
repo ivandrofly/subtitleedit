@@ -1,10 +1,10 @@
-﻿using Nikse.SubtitleEdit.Core;
-using Nikse.SubtitleEdit.Core.Common;
+﻿using Nikse.SubtitleEdit.Core.Common;
 using Nikse.SubtitleEdit.Core.Dictionaries;
 using Nikse.SubtitleEdit.Logic;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace Nikse.SubtitleEdit.Forms
@@ -104,22 +104,28 @@ namespace Nikse.SubtitleEdit.Forms
             Cursor = Cursors.WaitCursor;
             listViewFixes.BeginUpdate();
             listViewFixes.Items.Clear();
+
+            const int NameIndex = 1;
+            // filter only checked names with length > 1
+            var checkedNames = listViewNames.Items
+                .Cast<ListViewItem>()
+                .Where(i => i.Checked && i.SubItems[NameIndex].Text.Length > 1)
+                .Select(i => i.SubItems[NameIndex].Text).ToArray();
+            
             foreach (var p in _subtitle.Paragraphs)
             {
-                string text = p.Text;
-                foreach (ListViewItem item in listViewNames.Items)
+                var text = p.Text;
+                
+                foreach (var name in checkedNames)
                 {
-                    string name = item.SubItems[1].Text;
-
-                    string textNoTags = HtmlUtil.RemoveHtmlTags(text, true);
-                    if (textNoTags != textNoTags.ToUpperInvariant())
+                    var textNoTags = HtmlUtil.RemoveHtmlTags(text, true);
+                    
+                    if (!IsAllUpper(textNoTags) &&
+                        text?.Contains(name, StringComparison.OrdinalIgnoreCase) == true && !IsAllUpper(name))
                     {
-                        if (item.Checked && text != null && text.Contains(name, StringComparison.OrdinalIgnoreCase) && name.Length > 1 && name != name.ToLowerInvariant())
-                        {
-                            var st = new StrippableText(text);
-                            st.FixCasing(new List<string> { name }, true, false, false, string.Empty);
-                            text = st.MergedString;
-                        }
+                        var st = new StrippableText(text);
+                        st.FixCasing(new List<string> { name }, true, false, false, string.Empty);
+                        text = st.MergedString;
                     }
                 }
                 if (text != p.Text)
@@ -131,6 +137,8 @@ namespace Nikse.SubtitleEdit.Forms
             groupBoxLinesFound.Text = string.Format(LanguageSettings.Current.ChangeCasingNames.LinesFoundX, listViewFixes.Items.Count);
             Cursor = Cursors.Default;
         }
+
+        private static bool IsAllUpper(string inp) => inp.Where(char.IsLetter).All(char.IsUpper);
 
         private void AddToPreviewListView(Paragraph p, string newText)
         {
