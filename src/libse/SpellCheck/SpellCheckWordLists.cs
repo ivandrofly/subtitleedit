@@ -117,32 +117,19 @@ namespace Nikse.SubtitleEdit.Core.SpellCheck
             }
 
             // Add names/userdic with "." or " " or "-"
-            foreach (var word in namesMultiWordList)
+            AddWordsContainingCharacter(namesMultiWordList, PeriodAndDash);
+            AddWordsContainingCharacter(_names, PeriodAndDash);
+            AddWordsContainingCharacter(_userWordList, PeriodAndDash);
+            AddWordsContainingCharacter(_userPhraseList, PeriodAndDash);
+        }
+        
+        private void AddWordsContainingCharacter(HashSet<string> words, char[] characters)
+        {
+            foreach (var word in words)
             {
-                if (word.Contains(PeriodAndDash))
+                if (word.Contains(characters))
                 {
                     _wordsWithDashesOrPeriods.Add(word);
-                }
-            }
-            foreach (string name in _names)
-            {
-                if (name.Contains(PeriodAndDash))
-                {
-                    _wordsWithDashesOrPeriods.Add(name);
-                }
-            }
-            foreach (string word in _userWordList)
-            {
-                if (word.Contains(PeriodAndDash))
-                {
-                    _wordsWithDashesOrPeriods.Add(word);
-                }
-            }
-            foreach (var phrase in _userPhraseList)
-            {
-                if (phrase.Contains(PeriodAndDash))
-                {
-                    _wordsWithDashesOrPeriods.Add(phrase);
                 }
             }
         }
