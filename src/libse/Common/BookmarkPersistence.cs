@@ -52,26 +52,22 @@ namespace Nikse.SubtitleEdit.Core.Common
 
         private string SerializeBookmarks()
         {
-            int count = 0;
-            var sb = new StringBuilder();
-            sb.AppendLine("{\"bookmarks\":[");
-            for (int i = 0; i < _subtitle.Paragraphs.Count; i++)
+            var count = _subtitle.Paragraphs.Count;
+            var bookmarks = new List<string>(count);
+
+            for (var i = 0; i < count; i++)
             {
                 var p = _subtitle.Paragraphs[i];
                 if (p.Bookmark != null)
                 {
-                    count++;
-                    if (count > 1)
-                    {
-                        sb.Append(",");
-                    }
-                    sb.Append("{\"idx\":" + i + ",\"txt\":\"" + Json.EncodeJsonText(p.Bookmark) + "\"}");
+                    var bookmark = $"{{\"idx\":{i},\"txt\":\"{Json.EncodeJsonText(p.Bookmark)}\"}}";
+                    bookmarks.Add(bookmark);
                 }
             }
-            sb.AppendLine("]}");
-            if (count > 0)
+
+            if (bookmarks.Count > 0)
             {
-                return sb.ToString();
+                return "{\"bookmarks\":[" + string.Join(",", bookmarks) + "]}";
             }
 
             return null;
