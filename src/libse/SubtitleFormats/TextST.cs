@@ -12,26 +12,15 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
 {
     public static class StreamExtensions
     {
-
         public static void WritePts(this Stream stream, ulong pts)
         {
             //TODO: check max
             var buffer = BitConverter.GetBytes(pts);
-            if (BitConverter.IsLittleEndian)
+            int startIndex = BitConverter.IsLittleEndian ? 0 : buffer.Length - 5;
+ 
+            for (int i = 4; i >= 0; --i)
             {
-                stream.WriteByte(buffer[4]);
-                stream.WriteByte(buffer[3]);
-                stream.WriteByte(buffer[2]);
-                stream.WriteByte(buffer[1]);
-                stream.WriteByte(buffer[0]);
-            }
-            else
-            {
-                stream.WriteByte(buffer[buffer.Length - 1]);
-                stream.WriteByte(buffer[buffer.Length - 2]);
-                stream.WriteByte(buffer[buffer.Length - 3]);
-                stream.WriteByte(buffer[buffer.Length - 4]);
-                stream.WriteByte(buffer[buffer.Length - 5]);
+                stream.WriteByte(buffer[startIndex + i]);
             }
         }
 
