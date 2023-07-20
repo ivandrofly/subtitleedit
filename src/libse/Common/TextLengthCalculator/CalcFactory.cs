@@ -5,7 +5,7 @@ namespace Nikse.SubtitleEdit.Core.Common.TextLengthCalculator
 {
     public static class CalcFactory
     {
-        public static List<ICalcLength> Calculators = new List<ICalcLength>
+        public static readonly List<ICalcLength> Calculators = new List<ICalcLength>
         {
             new CalcAll(),
             new CalcNoSpaceCpsOnly(),
@@ -15,13 +15,20 @@ namespace Nikse.SubtitleEdit.Core.Common.TextLengthCalculator
             new CalcIgnoreArabicDiacritics(),
             new CalcIgnoreArabicDiacriticsNoSpace(),
             new CalcNoSpaceOrPunctuation(),
-            new CalcNoSpaceOrPunctuationCpsOnly(),
+            new CalcNoSpaceOrPunctuationCpsOnly()
         };
 
         public static ICalcLength MakeCalculator(string strategy)
         {
-            var c = Calculators.FirstOrDefault(calculator => calculator.GetType().Name == strategy);
-            return c ?? new CalcAll();
+            foreach (var calculator in Calculators)
+            {
+                if (calculator.GetType().Name == strategy)
+                {
+                    return calculator;
+                }
+            }
+
+            return Calculators.First();
         }
     }
 }
