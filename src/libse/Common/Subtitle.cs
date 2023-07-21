@@ -438,25 +438,18 @@ namespace Nikse.SubtitleEdit.Core.Common
 
         public void AdjustDisplayTimeUsingSeconds(double seconds, List<int> selectedIndexes, List<double> shotChanges = null, bool enforceDurationLimits = true)
         {
-            if (Math.Abs(seconds) < 0.001)
+            const double negligibleSeconds = 0.001;
+            if (Math.Abs(seconds) < negligibleSeconds)
             {
                 return;
             }
 
             var adjustMs = seconds * TimeCode.BaseUnit;
-            if (selectedIndexes != null)
+            var indexesToProcess = selectedIndexes ?? Enumerable.Range(0, Paragraphs.Count).ToList();
+
+            foreach (var index in indexesToProcess)
             {
-                foreach (var idx in selectedIndexes)
-                {
-                    AdjustDisplayTimeUsingMilliseconds(idx, adjustMs, shotChanges, enforceDurationLimits);
-                }
-            }
-            else
-            {
-                for (int idx = 0; idx < Paragraphs.Count; idx++)
-                {
-                    AdjustDisplayTimeUsingMilliseconds(idx, adjustMs, shotChanges, enforceDurationLimits);
-                }
+                AdjustDisplayTimeUsingMilliseconds(index, adjustMs, shotChanges, enforceDurationLimits);
             }
         }
 
