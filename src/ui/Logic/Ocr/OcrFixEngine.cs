@@ -2050,9 +2050,10 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
 
             var wordsNotFound = 0;
             var words = HtmlUtil.RemoveOpenCloseTags(line, HtmlUtil.TagItalic).Split(" \r\n\t".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var trimChars = SpellCheckWordLists.SplitChars.ToArray();
             for (int i = 0; i < words.Length; i++)
             {
-                var word = words[i].Trim(SpellCheckWordLists.SplitChars.ToArray());
+                var word = words[i].Trim(trimChars);
                 if (word.Length >= minLength)
                 {
                     if (!IsWordKnownOrNumber(word, line))
