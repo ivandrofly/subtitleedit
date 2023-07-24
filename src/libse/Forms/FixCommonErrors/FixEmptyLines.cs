@@ -124,14 +124,25 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                         callbacks.AddFixToListView(p, fixAction2, oldText, p.Text);
                     }
 
-                    if (Configuration.Settings.Tools.RemoveEmptyLinesBetweenText &&
-                        callbacks.AllowFix(p, fixAction3) && text.Contains(Environment.NewLine + Environment.NewLine))
+                    if (Configuration.Settings.Tools.RemoveEmptyLinesBetweenText && callbacks.AllowFix(p, fixAction3))
                     {
-                        var beforeLength = text.Length;
-                        text = text.RemoveRecursiveLineBreaks();
-                        p.Text = text;
-                        emptyLinesRemoved += (beforeLength - text.Length) / Environment.NewLine.Length;
-                        callbacks.AddFixToListView(p, fixAction3, oldText, p.Text);
+                        var tempText = text.RemoveRecursiveLineBreaks();
+                        if (tempText.Length != text.Length)
+                        {
+                            var beforeLength = text.Length;
+                            text = tempText;
+                            p.Text = text;
+                            var totalRemoveChars = beforeLength - text.Length;
+                            
+                            // the removed line is being calculate this way because method RemoveRecursiveLineBreaks()
+                            // remove line breaks for windows, unix and linux style
+                            // by using the Environment.NewLine can give wrong result
+                            // e.g: foobar\n\nfoobar after removing it becomes "foobar\nfoobar"
+                            // (beforeLength - text.Length) gives 1, 1 / Environment.NewLine.Length => 0 if Environment.NewLine.Length == 2;
+                            emptyLinesRemoved += Math.Max(totalRemoveChars / Environment.NewLine.Length, totalRemoveChars);
+                            
+                            callbacks.AddFixToListView(p, fixAction3, oldText, p.Text);
+                        }
                     }
 
                     var arr = text.SplitToLines();
