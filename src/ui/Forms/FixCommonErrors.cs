@@ -2044,27 +2044,28 @@ namespace Nikse.SubtitleEdit.Forms
         {
             if (_hunspell == null && Language != null)
             {
-                var fileMatches = Directory.GetFiles(Utilities.DictionaryFolder, Language + "*.dic");
-                if (fileMatches.Length > 0)
+                CreateHunspell();
+            }
+
+            return _hunspell?.Spell(word) ?? false;
+        }
+
+        private void CreateHunspell()
+        {
+            var fileMatches = Directory.GetFiles(Utilities.DictionaryFolder, Language + "*.dic");
+            if (fileMatches.Length > 0)
+            {
+                var dictionary = fileMatches[0].Substring(0, fileMatches[0].Length - 4);
+
+                try
                 {
-                    var dictionary = fileMatches[0].Substring(0, fileMatches[0].Length - 4);
-                    try
-                    {
-                        _hunspell = Hunspell.GetHunspell(dictionary);
-                    }
-                    catch
-                    {
-                        _hunspell = null;
-                    }
+                    _hunspell = Hunspell.GetHunspell(dictionary);
+                }
+                catch
+                {
+                    _hunspell = null;
                 }
             }
-
-            if (_hunspell == null)
-            {
-                return false;
-            }
-
-            return _hunspell.Spell(word);
         }
 
         private void toolStripMenuItemSelectAll_Click(object sender, EventArgs e)
@@ -2079,6 +2080,7 @@ namespace Nikse.SubtitleEdit.Forms
         {
             foreach (ListViewItem item in listViewFixes.Items)
             {
+                var value = item.Checked ^ false;
                 item.Checked = !item.Checked;
             }
         }
