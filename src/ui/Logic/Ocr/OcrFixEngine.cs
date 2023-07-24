@@ -2034,58 +2034,81 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
             return false;
         }
 
-        public int CountUnknownWordsViaDictionary(string line, out int numberOfCorrectWords)
+        public int CountUnknownWordsViaDictionary(string line, out int totalKnownWordOrHunspellAware)
         {
-            numberOfCorrectWords = 0;
+            totalKnownWordOrHunspellAware = 0;
             if (_hunspell == null)
             {
                 return 0;
             }
 
-            var minLength = 2;
+            var minValidWordLength = 2;
             if (Configuration.Settings.Tools.CheckOneLetterWords)
             {
-                minLength = 1;
+                minValidWordLength = 1;
             }
 
-            var wordsNotFound = 0;
             var words = HtmlUtil.RemoveOpenCloseTags(line, HtmlUtil.TagItalic).Split(" \r\n\t".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             var trimChars = SpellCheckWordLists.SplitChars.ToArray();
-            for (int i = 0; i < words.Length; i++)
+
+            var wordCount = 0;
+            foreach (var word in words)
             {
-                var word = words[i].Trim(trimChars);
-                if (word.Length >= minLength)
+                var trimmedWord = word.Trim(trimChars);
+
+                // doesn't meet the minimum length required for a valid word
+                if (trimmedWord.Length < minValidWordLength)
                 {
-                    if (!IsWordKnownOrNumber(word, line))
-                    {
-                        var correct = word.Length > 1 && _hunspell.Spell(word);
-                        if (!correct)
-                        {
-                            correct = word.Length > 2 && _hunspell.Spell(word.Trim('\''));
-                        }
+                    continue;
+                }
 
-                        if (!correct && word.Length == 1 && _threeLetterIsoLanguageName == "eng" && (word == "I" || word == "A" || word == "a"))
-                        {
-                            correct = true;
-                        }
+                // count has a valid word
+                wordCount++;
 
-                        if (correct)
-                        {
-                            numberOfCorrectWords++;
-                        }
-                        else
-                        {
-                            wordsNotFound++;
-                        }
-                    }
-                    else if (word.Length > 3)
-                    {
-                        numberOfCorrectWords++;
-                    }
+                if (IsWordKnownOrNumber(trimmedWord, line) || IsHunspellAware(trimmedWord))
+                {
+                    totalKnownWordOrHunspellAware++;
                 }
             }
+            
+            // return not unknown words count
+            return wordCount - totalKnownWordOrHunspellAware;
+        }
 
-            return wordsNotFound;
+        private bool IsHunspellAware(string word)
+        {
+            if (word == null) return false;
+
+            var len = word.Length;
+            // handle for single letter word
+            if (len == 1)
+            {
+                // english
+                if (_threeLetterIsoLanguageName == "eng" && (word == "I" || word == "A" || word == "a"))
+                {
+                    return true;
+                }
+
+                // add handler for culture specific here...
+
+                // single word spell check
+                return _hunspell.Spell(word);
+            }
+
+            var startIndex = 0;
+            var endIndex = len - 1;
+
+            // skip single quote starting from the start to end
+            while (startIndex < len && word[startIndex] == '\'') startIndex++;
+            // skip single quote starting from the end to front
+            while (endIndex >= 0 && word[endIndex] == '\'') endIndex--;
+
+            // endIndex < startIndex: true word contains two or more char which are only quote quotes
+            // endIndex == startIndex: is word has only one char which is the single quote
+            if (endIndex < startIndex || endIndex == startIndex) return false;
+
+            // re-construct new string with won't include the skipped single quotes
+            return _hunspell.Spell(word.Substring(startIndex, endIndex - startIndex + 1));
         }
 
         public void Dispose()
