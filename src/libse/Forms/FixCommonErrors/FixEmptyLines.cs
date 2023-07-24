@@ -128,10 +128,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                         callbacks.AllowFix(p, fixAction3) && text.Contains(Environment.NewLine + Environment.NewLine))
                     {
                         var beforeLength = text.Length;
-                        while (text.Contains(Environment.NewLine + Environment.NewLine))
-                        {
-                            text = text.Replace(Environment.NewLine + Environment.NewLine, Environment.NewLine);
-                        }
+                        text = text.RemoveRecursiveLineBreaks();
                         p.Text = text;
                         emptyLinesRemoved += (beforeLength - text.Length) / Environment.NewLine.Length;
                         callbacks.AddFixToListView(p, fixAction3, oldText, p.Text);
