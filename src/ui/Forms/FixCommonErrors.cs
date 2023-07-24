@@ -2068,21 +2068,25 @@ namespace Nikse.SubtitleEdit.Forms
             }
         }
 
-        private void toolStripMenuItemSelectAll_Click(object sender, EventArgs e)
+        private void UpdateItemsStatus(Func<bool, bool> statusEvaluator)
         {
+            listViewFixes.BeginUpdate();
             foreach (ListViewItem item in listViewFixes.Items)
             {
-                item.Checked = true;
+                item.Checked = statusEvaluator(item.Checked);
             }
+
+            listViewFixes.EndUpdate();
+        }
+
+        private void toolStripMenuItemSelectAll_Click(object sender, EventArgs e)
+        {
+            UpdateItemsStatus(value => true);
         }
 
         private void toolStripMenuItemInverseSelection_Click(object sender, EventArgs e)
         {
-            foreach (ListViewItem item in listViewFixes.Items)
-            {
-                var value = item.Checked ^ false;
-                item.Checked = !item.Checked;
-            }
+            UpdateItemsStatus(value => value ^ true);
         }
 
         private void setCurrentFixesAsDefaultToolStripMenuItem_Click(object sender, EventArgs e)
