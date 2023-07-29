@@ -445,22 +445,28 @@ namespace Nikse.SubtitleEdit.Core.Common
 
         private static string GetStartTags(string input)
         {
-            var pre = new StringBuilder();
-            var s = input;
-            if (s.StartsWith("{\\") && s.Contains('}'))
+            if (string.IsNullOrEmpty(input))
             {
-                pre.Append(s.Substring(0, s.IndexOf('}') + 1));
-                s = s.Remove(0, pre.Length);
+                return string.Empty;
             }
 
-            while (s.StartsWith("<") && s.Contains('>'))
+            var len = input.Length;
+            var chatAtPosition = input[0];
+            if (chatAtPosition == '{' && len > 1 && input[1] == '\\')
             {
-                var htmlPre = s.Substring(0, s.IndexOf('>') + 1);
-                s = s.Remove(0, htmlPre.Length);
-                pre.Append(htmlPre);
+                var closeIndex = input.IndexOf('}', 0);
+                if (closeIndex < 0) return string.Empty;
+                return input.Substring(0, closeIndex + 1);
             }
 
-            return pre.ToString();
+            if (chatAtPosition == '<')
+            {
+                var closeIndex = input.IndexOf('>', 0);
+                if (closeIndex < 0) return string.Empty;
+                return input.Substring(0, closeIndex + 1);
+            }
+
+            return string.Empty;
         }
 
         public bool IsDialog(List<string> lines)
