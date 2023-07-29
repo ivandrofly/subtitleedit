@@ -245,9 +245,10 @@ namespace Nikse.SubtitleEdit.Core.Common
         {
             var len = line.Length;
             var startIndex = 0;
+            const char lineFeedChar = '\n';
             for (var i = 0; i < len; i++)
             {
-                if (line[i] == '\n')
+                if (line[i] == lineFeedChar)
                 {
                     // subtrahend is one if i calculation includes \r otherwise is zero
                     var subtrahend = (i > 0 && line[i - 1] == '\r') ? 1 : 0;
@@ -256,6 +257,10 @@ namespace Nikse.SubtitleEdit.Core.Common
                         return true;
                     }
 
+                    // skip recurse line feed chars
+                    while (i + 1 < len && line[i] == lineFeedChar) i++;
+
+                    // calculate start only after skipping all line feed chars
                     startIndex = i + 1;
                 }
             }
