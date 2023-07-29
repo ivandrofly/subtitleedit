@@ -250,7 +250,7 @@ namespace Nikse.SubtitleEdit.Core.Common
             {
                 if (line[i] == lineFeedChar)
                 {
-                    // subtrahend is one if i calculation includes \r otherwise is zero
+                    // subtrahend is one if calculation includes \r otherwise zero
                     var subtrahend = (i > 0 && line[i - 1] == '\r') ? 1 : 0;
                     if ((i - subtrahend - startIndex) > Math.Max(_singleLineMaxLength, 2))
                     {
