@@ -249,9 +249,9 @@ namespace Nikse.SubtitleEdit.Core.Common
             {
                 if (line[i] == '\n')
                 {
-                    // calculate line length not including \r if present after finding \n
-                    var lineLen = (i > 0 && line[i - 1] == '\r') ? (i - 1 - startIndex) : i - startIndex;
-                    if (lineLen > Math.Max(_singleLineMaxLength, 2))
+                    // subtrahend is one if i calculation includes \r otherwise is zero
+                    var subtrahend = (i > 0 && line[i - 1] == '\r') ? 1 : 0;
+                    if ((i - subtrahend - startIndex) > Math.Max(_singleLineMaxLength, 2))
                     {
                         return true;
                     }
