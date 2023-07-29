@@ -454,14 +454,14 @@ namespace Nikse.SubtitleEdit.Core.Common
             var chatAtPosition = input[0];
             if (chatAtPosition == '{' && len > 1 && input[1] == '\\')
             {
-                var closeIndex = input.IndexOf('}', 0);
+                var closeIndex = input.IndexOf('}', 2);
                 if (closeIndex < 0) return string.Empty;
                 return input.Substring(0, closeIndex + 1);
             }
 
             if (chatAtPosition == '<')
             {
-                var closeIndex = input.IndexOf('>', 0);
+                var closeIndex = input.IndexOf('>', 1);
                 if (closeIndex < 0) return string.Empty;
                 return input.Substring(0, closeIndex + 1);
             }
