@@ -209,6 +209,10 @@ namespace Nikse.SubtitleEdit.Core.Common
                             return lastWords.Trim() + " "; // use this word in next paragraph
                         }
                     }
+                    else
+                    {
+                        break;
+                    }
                 }
                 foreach (var l in SplitToThreeOrFourLines(text))
                 {
