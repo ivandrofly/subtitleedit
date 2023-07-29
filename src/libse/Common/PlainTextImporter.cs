@@ -257,7 +257,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                         return true;
                     }
 
-                    // skip recurse line feed chars
+                    // skip recursive line feed chars
                     while (i + 1 < len && line[i] == lineFeedChar) i++;
 
                     // calculate start only after skipping all line feed chars
