@@ -243,13 +243,23 @@ namespace Nikse.SubtitleEdit.Core.Common
 
         private bool ExceedsMax(string line)
         {
-            foreach (var s in line.SplitToLines())
+            var len = line.Length;
+            var startIndex = 0;
+            for (var i = 0; i < len; i++)
             {
-                if (s.Length > _singleLineMaxLength)
+                if (line[i] == '\n')
                 {
-                    return true;
+                    // calculate line length not including \r if present after finding \n
+                    var lineLen = (i > 0 && line[i - 1] == '\r') ? (i - 1 - startIndex) : i - startIndex;
+                    if (lineLen > Math.Max(_singleLineMaxLength, 2))
+                    {
+                        return true;
+                    }
+
+                    startIndex = i + 1;
                 }
             }
+
             return false;
         }
 
