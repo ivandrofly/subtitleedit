@@ -270,7 +270,7 @@ namespace Nikse.SubtitleEdit.Core.Common
 
             return _lastNoBreakAfterList;
         }
-
+        
         public static string AutoBreakLineMoreThanTwoLines(string text, int maximumLength, int mergeLinesShorterThan, string language)
         {
             if (text == null || text.Length < 3 || !(text.Contains(" ") || text.Contains("\n")))
@@ -278,7 +278,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return text;
             }
 
-            string s = AutoBreakLinePrivate(text, maximumLength, mergeLinesShorterThan, language, Configuration.Settings.Tools.AutoBreakLineEndingEarly);
+            var s = AutoBreakLinePrivate(text, maximumLength, mergeLinesShorterThan, language, Configuration.Settings.Tools.AutoBreakLineEndingEarly);
 
             var arr = HtmlUtil.RemoveHtmlTags(s, true).SplitToLines();
             if (arr.Count == 1 && arr[0].Length <= maximumLength ||
@@ -290,49 +290,49 @@ namespace Nikse.SubtitleEdit.Core.Common
             s = RemoveLineBreaks(text);
             var htmlTags = new Dictionary<int, string>();
             var sb = new StringBuilder(s.Length);
-            int six = 0;
-            while (six < s.Length)
+            var index = 0;
+            while (index < s.Length)
             {
-                var letter = s[six];
-                var tagFound = letter == '<' &&
-                               (s.Substring(six).StartsWith("<font", StringComparison.OrdinalIgnoreCase)
-                                || s.Substring(six).StartsWith("</font", StringComparison.OrdinalIgnoreCase)
-                                || s.Substring(six).StartsWith("<u", StringComparison.OrdinalIgnoreCase)
-                                || s.Substring(six).StartsWith("</u", StringComparison.OrdinalIgnoreCase)
-                                || s.Substring(six).StartsWith("<b", StringComparison.OrdinalIgnoreCase)
-                                || s.Substring(six).StartsWith("</b", StringComparison.OrdinalIgnoreCase)
-                                || s.Substring(six).StartsWith("<i", StringComparison.OrdinalIgnoreCase)
-                                || s.Substring(six).StartsWith("</i", StringComparison.OrdinalIgnoreCase));
-                int endIndex = -1;
+                var charAtIndex = s[index];
+                var tagFound = charAtIndex == '<' &&
+                               (s.Substring(index).StartsWith("<font", StringComparison.OrdinalIgnoreCase)
+                                || s.Substring(index).StartsWith("</font", StringComparison.OrdinalIgnoreCase)
+                                || s.Substring(index).StartsWith("<u", StringComparison.OrdinalIgnoreCase)
+                                || s.Substring(index).StartsWith("</u", StringComparison.OrdinalIgnoreCase)
+                                || s.Substring(index).StartsWith("<b", StringComparison.OrdinalIgnoreCase)
+                                || s.Substring(index).StartsWith("</b", StringComparison.OrdinalIgnoreCase)
+                                || s.Substring(index).StartsWith("<i", StringComparison.OrdinalIgnoreCase)
+                                || s.Substring(index).StartsWith("</i", StringComparison.OrdinalIgnoreCase));
+                var endIndex = -1;
                 if (tagFound)
                 {
-                    endIndex = s.IndexOf('>', six + 1);
+                    endIndex = s.IndexOf('>', index + 1);
                 }
 
                 if (tagFound && endIndex > 0)
                 {
-                    string tag = s.Substring(six, endIndex - six + 1);
-                    s = s.Remove(six, tag.Length);
-                    if (htmlTags.ContainsKey(six))
+                    var tag = s.Substring(index, endIndex - index + 1);
+                    s = s.Remove(index, tag.Length);
+                    if (htmlTags.ContainsKey(index))
                     {
-                        htmlTags[six] = htmlTags[six] + tag;
+                        htmlTags[index] += tag;
                     }
                     else
                     {
-                        htmlTags.Add(six, tag);
+                        htmlTags.Add(index, tag);
                     }
                 }
                 else
                 {
-                    sb.Append(letter);
-                    six++;
+                    sb.Append(charAtIndex);
+                    index++;
                 }
             }
             s = sb.ToString();
 
             // check 3 lines
             var pti = new PlainTextImporter(false, false, 1, ".?!", maximumLength, language);
-            var three = pti.SplitToThree(sb.ToString());
+            var three = pti.SplitToThree(s);
             if (three.Count == 3 &&
                 three[0].Length < maximumLength &&
                 three[1].Length < maximumLength &&
@@ -353,92 +353,104 @@ namespace Nikse.SubtitleEdit.Core.Common
             }
 
             var words = s.Split(' ');
-            for (var numberOfLines = 3; numberOfLines < 9999; numberOfLines++)
+
+            // single line max length defined in settings
+            var maxLineNumbers = Configuration.Settings.General.MaxNumberOfLines;
+            // Configuration.Settings.General.SubtitleLineMaximumLength
+                
+            // min(len / 3, singleLineMaxLength)
+            var singleLineMaxLength = Math.Min(s.Length / maxLineNumbers, maximumLength);
+            
+            var lineLengths = SplitToX(words, maxLineNumbers, singleLineMaxLength);
+            
+            // cannot split
+            if (IsAnyLengthGreaterThanMax(lineLengths, singleLineMaxLength))
             {
-                var average = s.Length / numberOfLines + 1;
-                for (var len = average; len < maximumLength; len++)
+                return text;
+            }
+
+            var sentenceLengthSum = 0;
+            foreach (var lineLength in lineLengths)
+            {
+                sentenceLengthSum += lineLength;
+                if (htmlTags.ContainsKey(sentenceLengthSum))
                 {
-                    var list = SplitToX(words, numberOfLines, len);
-                    var allOk = true;
-                    foreach (var lineLength in list)
+                    var v = htmlTags[sentenceLengthSum];
+                    if (v.StartsWith("</", StringComparison.Ordinal))
                     {
-                        if (lineLength > maximumLength)
-                        {
-                            allOk = false;
-                        }
+                        v = Environment.NewLine + v;
+                    }
+                    else
+                    {
+                        v += Environment.NewLine;
                     }
 
-                    if (allOk)
-                    {
-                        var index = 0;
-                        foreach (var item in list)
-                        {
-                            index += item;
-                            if (htmlTags.ContainsKey(index))
-                            {
-                                var v = htmlTags[index];
-                                if (v.StartsWith("</", StringComparison.Ordinal))
-                                {
-                                    v = Environment.NewLine + v;
-                                }
-                                else
-                                {
-                                    v += Environment.NewLine;
-                                }
-
-                                htmlTags[index] = v;
-                            }
-                            else
-                            {
-                                htmlTags.Add(index, Environment.NewLine);
-                            }
-                        }
-
-                        return ReInsertHtmlTagsAndCleanUp(s, htmlTags);
-                    }
+                    htmlTags[sentenceLengthSum] = v;
+                }
+                else
+                {
+                    htmlTags.Add(sentenceLengthSum, Environment.NewLine);
                 }
             }
 
-            return text;
+            return ReInsertHtmlTagsAndCleanUp(s, htmlTags);
+        }
+
+        private static bool IsAnyLengthGreaterThanMax(List<int> lengths, int maximumLength)
+        {
+            foreach (var length in lengths)
+            {
+                if (length > maximumLength) return true;
+            }
+
+            return false;
         }
 
         private static string ReInsertHtmlTagsAndCleanUp(string input, Dictionary<int, string> htmlTags)
         {
             var s = ReInsertHtmlTags(input, htmlTags);
-            s = s.Replace(" " + Environment.NewLine, Environment.NewLine);
-            s = s.Replace(Environment.NewLine + " ", Environment.NewLine);
-            s = s.Replace(Environment.NewLine + "</i>", "</i>" + Environment.NewLine);
-            s = s.Replace(Environment.NewLine + "</b>", "</b>" + Environment.NewLine);
-            s = s.Replace(Environment.NewLine + "</u>", "</u>" + Environment.NewLine);
-            s = s.Replace(Environment.NewLine + "</font>", "</font>" + Environment.NewLine);
+            s = s.FixExtraSpaces();
+            if (s.Contains(Environment.NewLine))
+            {
+                s = s.Replace(Environment.NewLine + "</i>", "</i>" + Environment.NewLine);
+                s = s.Replace(Environment.NewLine + "</b>", "</b>" + Environment.NewLine);
+                s = s.Replace(Environment.NewLine + "</u>", "</u>" + Environment.NewLine);
+                s = s.Replace(Environment.NewLine + "</font>", "</font>" + Environment.NewLine);
+            }
             return s.TrimEnd();
         }
 
-        private static List<int> SplitToX(string[] words, int count, int average)
+        private static List<int> SplitToX(string[] words, int maxLineNumbers, int average)
         {
-            var list = new List<int>();
-            int currentIdx = 0;
-            int currentCount = 0;
-            foreach (string word in words)
+            var sentenceLengths = new List<int>();
+            var lineCount = 0;
+            var sentenceLength = 0;
+            const int whiteSpaceLength = 1;
+            foreach (var word in words)
             {
-                if (currentCount + word.Length + 3 > average && currentIdx < count)
+                if (sentenceLength + word.Length + 3 > average && lineCount < maxLineNumbers)
                 {
-                    list.Add(currentCount);
-                    currentIdx++;
-                    currentCount = 0;
+                    sentenceLengths.Add(sentenceLength);
+                    lineCount++;
+
+                    // reset current word length count
+                    sentenceLength = 0;
                 }
-                currentCount += word.Length + 1;
+
+                sentenceLength += word.Length + whiteSpaceLength;
             }
-            if (currentIdx < count)
+            
+            // add the remaining word / sentence if still < max line number
+            if (lineCount < maxLineNumbers)
             {
-                list.Add(currentCount);
+                sentenceLengths.Add(sentenceLength);
             }
             else
             {
-                list[list.Count - 1] += currentCount;
+                sentenceLengths[sentenceLengths.Count - 1] += sentenceLength;
             }
 
-            return list;
+            return sentenceLengths;
         }
 
         public static string AutoBreakLine(string text, int maximumLength, int mergeLinesShorterThan, string language)
@@ -626,9 +638,8 @@ namespace Nikse.SubtitleEdit.Core.Common
                     s = s.Remove(idx + tag.Length + Environment.NewLine.Length, tag.Length);
                 }
             }
-            s = s.Replace(" " + Environment.NewLine, Environment.NewLine);
-            s = s.Replace(Environment.NewLine + " ", Environment.NewLine);
-            return s.TrimEnd();
+
+            return s.FixExtraSpaces().TrimEnd();
         }
 
         public static string RemoveLineBreaks(string input)
@@ -671,40 +682,42 @@ namespace Nikse.SubtitleEdit.Core.Common
         /// <summary>
         /// Note: Requires a space before the NewLine
         /// </summary>
-        private static string ReInsertHtmlTags(string s, Dictionary<int, string> htmlTags)
+        private static string ReInsertHtmlTags(string input, IReadOnlyDictionary<int, string> htmlTags)
         {
-            if (htmlTags.Count > 0)
+            if (htmlTags.Count == 0)
             {
-                var sb = new StringBuilder(s.Length);
-                int six = 0;
-                foreach (var letter in s)
-                {
-                    if (Environment.NewLine.Contains(letter))
-                    {
-                        sb.Append(letter);
-                    }
-                    else
-                    {
-                        if (htmlTags.ContainsKey(six))
-                        {
-                            sb.Append(htmlTags[six]);
-                        }
-                        sb.Append(letter);
-                        six++;
-                    }
-                }
-
-                for (int i = 0; i < 15; i++)
-                {
-                    if (htmlTags.ContainsKey(six + i))
-                    {
-                        sb.Append(htmlTags[six + i]);
-                    }
-                }
-
-                return sb.ToString();
+                return input;
             }
-            return s;
+            
+            var sb = new StringBuilder(input.Length);
+            var index = 0;
+            foreach (var ch in input)
+            {
+                if (ch == '\n' || ch == '\r')
+                {
+                    sb.Append(ch);
+                }
+                else
+                {
+                    if (htmlTags.TryGetValue(index, out var tag))
+                    {
+                        sb.Append(tag);
+                    }
+
+                    sb.Append(ch);
+                    index++;
+                }
+            }
+
+            for (var i = 0; i < 15; i++)
+            {
+                if (htmlTags.ContainsKey(index + i))
+                {
+                    sb.Append(htmlTags[index + i]);
+                }
+            }
+
+            return sb.ToString();
         }
 
         public static string UnbreakLine(string text)
