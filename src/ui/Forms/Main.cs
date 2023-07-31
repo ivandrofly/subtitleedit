@@ -10901,7 +10901,8 @@ namespace Nikse.SubtitleEdit.Forms
                 e.SuppressKeyPress = true;
                 return;
             }
-            else if (_shortcuts.MainTextBoxAssaRemoveTag == e.KeyData)
+
+            if (_shortcuts.MainTextBoxAssaRemoveTag == e.KeyData)
             {
                 MakeHistoryForUndo(string.Format(_language.BeforeX, LanguageSettings.Current.Settings.MainTextBoxAssaRemoveTag));
                 AssaTagHelper.RemoveTagAtCursor(textBoxListViewText);
@@ -13847,10 +13848,8 @@ namespace Nikse.SubtitleEdit.Forms
                 {
                     return Utilities.GetColorFromFontString(p.Text, defaultColor);
                 }
-                else
-                {
-                    return Utilities.GetColorFromAssa(p.Text, defaultColor);
-                }
+
+                return Utilities.GetColorFromAssa(p.Text, defaultColor);
             }
 
             return defaultColor;
@@ -14056,7 +14055,8 @@ namespace Nikse.SubtitleEdit.Forms
 
                 return;
             }
-            else if (format.Name == WebVTT.NameOfFormat || format.Name == WebVTTFileWithLineNumber.NameOfFormat)
+
+            if (format.Name == WebVTT.NameOfFormat || format.Name == WebVTTFileWithLineNumber.NameOfFormat)
             {
                 var c = ColorTranslator.FromHtml(color);
                 WebVttStyle styleWithColor = WebVttHelper.GetOnlyColorStyle(c, _subtitle.Header);
@@ -15346,25 +15346,23 @@ namespace Nikse.SubtitleEdit.Forms
                 MessageBox.Show(_language.NoSubtitlesFound);
                 return false;
             }
-            else if (mp4SubtitleTracks.Count == 1)
+
+            if (mp4SubtitleTracks.Count == 1)
             {
                 LoadMp4Subtitle(fileName, mp4SubtitleTracks[0]);
                 return true;
             }
-            else
+            using (var subtitleChooser = new MatroskaSubtitleChooser("mp4"))
             {
-                using (var subtitleChooser = new MatroskaSubtitleChooser("mp4"))
+                subtitleChooser.Initialize(mp4SubtitleTracks);
+                if (subtitleChooser.ShowDialog(this) == DialogResult.OK)
                 {
-                    subtitleChooser.Initialize(mp4SubtitleTracks);
-                    if (subtitleChooser.ShowDialog(this) == DialogResult.OK)
-                    {
-                        LoadMp4Subtitle(fileName, mp4SubtitleTracks[subtitleChooser.SelectedIndex]);
-                        return true;
-                    }
+                    LoadMp4Subtitle(fileName, mp4SubtitleTracks[subtitleChooser.SelectedIndex]);
+                    return true;
                 }
-
-                return false;
             }
+
+            return false;
         }
 
         private bool ImportSubtitleFromDivX(string fileName)
@@ -15483,10 +15481,8 @@ namespace Nikse.SubtitleEdit.Forms
             {
                 return subtitle;
             }
-            else
-            {
-                subtitle.Paragraphs.AddRange(mp4SubtitleTrack.Mdia.Minf.Stbl.GetParagraphs());
-            }
+
+            subtitle.Paragraphs.AddRange(mp4SubtitleTrack.Mdia.Minf.Stbl.GetParagraphs());
 
             return subtitle;
         }
@@ -15708,12 +15704,13 @@ namespace Nikse.SubtitleEdit.Forms
                 MessageBox.Show(_language.NoSubtitlesFound);
                 return;
             }
-            else if (ext == ".vob" || ext == ".ifo")
+
+            if (ext == ".vob" || ext == ".ifo")
             {
                 ImportDvdSubtitle(fileName);
                 return;
             }
-            else if (ext == ".idx")
+            if (ext == ".idx")
             {
                 var subFileName = fileName.Substring(0, fileName.Length - 3) + "sub";
                 if (File.Exists(subFileName) && FileUtil.IsVobSub(subFileName))
@@ -18614,22 +18611,16 @@ namespace Nikse.SubtitleEdit.Forms
                     {
                         return next.StartTime.TotalMilliseconds - SubtitleFormat.FramesToMilliseconds(Configuration.Settings.BeautifyTimeCodes.Profile.ChainingInCueOnShotLeftGreenZone);
                     }
-                    else
-                    {
-                        return next.StartTime.TotalMilliseconds - Configuration.Settings.BeautifyTimeCodes.Profile.ChainingInCueOnShotMaxGap;
-                    }
+
+                    return next.StartTime.TotalMilliseconds - Configuration.Settings.BeautifyTimeCodes.Profile.ChainingInCueOnShotMaxGap;
                 }
-                else
+
+                if (Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralUseZones)
                 {
-                    if (Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralUseZones)
-                    {
-                        return next.StartTime.TotalMilliseconds - SubtitleFormat.FramesToMilliseconds(Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralLeftGreenZone);
-                    }
-                    else
-                    {
-                        return next.StartTime.TotalMilliseconds - Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralMaxGap;
-                    }
+                    return next.StartTime.TotalMilliseconds - SubtitleFormat.FramesToMilliseconds(Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralLeftGreenZone);
                 }
+
+                return next.StartTime.TotalMilliseconds - Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralMaxGap;
             }
 
             var historyAdded = false;
@@ -18706,22 +18697,16 @@ namespace Nikse.SubtitleEdit.Forms
                     {
                         return previous.EndTime.TotalMilliseconds + SubtitleFormat.FramesToMilliseconds(Configuration.Settings.BeautifyTimeCodes.Profile.ChainingOutCueOnShotRightGreenZone);
                     }
-                    else
-                    {
-                        return previous.EndTime.TotalMilliseconds + Configuration.Settings.BeautifyTimeCodes.Profile.ChainingOutCueOnShotMaxGap;
-                    }
+
+                    return previous.EndTime.TotalMilliseconds + Configuration.Settings.BeautifyTimeCodes.Profile.ChainingOutCueOnShotMaxGap;
                 }
-                else
+
+                if (Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralUseZones)
                 {
-                    if (Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralUseZones)
-                    {
-                        return previous.EndTime.TotalMilliseconds + SubtitleFormat.FramesToMilliseconds(Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralLeftGreenZone);
-                    }
-                    else
-                    {
-                        return previous.EndTime.TotalMilliseconds + Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralMaxGap;
-                    }
+                    return previous.EndTime.TotalMilliseconds + SubtitleFormat.FramesToMilliseconds(Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralLeftGreenZone);
                 }
+
+                return previous.EndTime.TotalMilliseconds + Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralMaxGap;
             }
 
             var historyAdded = false;
@@ -21895,7 +21880,8 @@ namespace Nikse.SubtitleEdit.Forms
                             MessageBox.Show(_language.NoSupportHereBluRaySup);
                             return;
                         }
-                        else if (FileUtil.IsSpDvdSup(fileName))
+
+                        if (FileUtil.IsSpDvdSup(fileName))
                         {
                             MessageBox.Show(_language.NoSupportHereDvdSup);
                             return;
@@ -21956,7 +21942,8 @@ namespace Nikse.SubtitleEdit.Forms
                             MessageBox.Show(_language.NoSubtitlesFound);
                             return;
                         }
-                        else if (mp4SubtitleTracks.Count == 1)
+
+                        if (mp4SubtitleTracks.Count == 1)
                         {
                             sub = LoadMp4SubtitleForSync(mp4SubtitleTracks[0]);
                         }
@@ -22886,19 +22873,17 @@ namespace Nikse.SubtitleEdit.Forms
                 OpenVideo(movieFileName);
                 return true;
             }
-            else
-            {
-                var index = fileNameNoExtension.LastIndexOf('.');
-                if (index > 0 && TryToFindAndOpenVideoFile(fileNameNoExtension.Remove(index)))
-                {
-                    return true;
-                }
 
-                index = fileNameNoExtension.LastIndexOf('_');
-                if (index > 0 && TryToFindAndOpenVideoFile(fileNameNoExtension.Remove(index)))
-                {
-                    return true;
-                }
+            var index = fileNameNoExtension.LastIndexOf('.');
+            if (index > 0 && TryToFindAndOpenVideoFile(fileNameNoExtension.Remove(index)))
+            {
+                return true;
+            }
+
+            index = fileNameNoExtension.LastIndexOf('_');
+            if (index > 0 && TryToFindAndOpenVideoFile(fileNameNoExtension.Remove(index)))
+            {
+                return true;
             }
 
             return false;
@@ -28837,7 +28822,8 @@ namespace Nikse.SubtitleEdit.Forms
                 e.SuppressKeyPress = true;
                 return;
             }
-            else if (_shortcuts.MainTextBoxAssaRemoveTag == e.KeyData)
+
+            if (_shortcuts.MainTextBoxAssaRemoveTag == e.KeyData)
             {
                 MakeHistoryForUndo(string.Format(_language.BeforeX, LanguageSettings.Current.Settings.MainTextBoxAssaRemoveTag));
                 AssaTagHelper.RemoveTagAtCursor(textBoxListViewTextOriginal);
@@ -31218,10 +31204,8 @@ namespace Nikse.SubtitleEdit.Forms
 
                 return text;
             }
-            else
-            {
-                return string.Format(@"{0}{1}", tag, text);
-            }
+
+            return string.Format(@"{0}{1}", tag, text);
         }
 
         private void toolStripMenuItemAlignment_Click(object sender, EventArgs e)
@@ -31651,7 +31635,8 @@ namespace Nikse.SubtitleEdit.Forms
                             ShowStatus(string.Format(_language.XLinesSavedAsY, newSub.Paragraphs.Count, fileName));
                             return;
                         }
-                        else if (format.GetType() == typeof(Ebu))
+
+                        if (format.GetType() == typeof(Ebu))
                         {
                             new Ebu().Save(fileName, GetSaveSubtitle(newSub));
                             ShowStatus(string.Format(_language.XLinesSavedAsY, newSub.Paragraphs.Count, fileName));
@@ -34971,10 +34956,8 @@ namespace Nikse.SubtitleEdit.Forms
                     {
                         return true;
                     }
-                    else
-                    {
-                        return false;
-                    }
+
+                    return false;
                 }
             }
 

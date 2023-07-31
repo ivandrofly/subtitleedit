@@ -213,10 +213,8 @@ namespace Nikse.SubtitleEdit.Core.Common
                 {
                     return value.Substring(startIndex, length);
                 }
-                else
-                {
-                    return value.Substring(startIndex);
-                }
+
+                return value.Substring(startIndex);
             } 
             catch (ArgumentOutOfRangeException)
             {

@@ -188,7 +188,8 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                 {
                     return TimeCode.FromSeconds(long.Parse(arr[0]) / double.Parse(arr[1]));
                 }
-                else if (arr.Length == 1)
+
+                if (arr.Length == 1)
                 {
                     return TimeCode.FromSeconds(float.Parse(arr[0]));
                 }

@@ -285,45 +285,40 @@ namespace Nikse.SubtitleEdit.Core.Forms
                 {
                     return (previousShotChange, FindBestCueResult.SnappedToRedZone);
                 }
-                else
-                {
-                    return (nextShotChange, FindBestCueResult.SnappedToRedZone);
-                }
+
+                return (nextShotChange, FindBestCueResult.SnappedToRedZone);
             }
-            else if (isInPreviousShotChangeGreenZone && isInNextShotChangeGreenZone)
+
+            if (isInPreviousShotChangeGreenZone && isInNextShotChangeGreenZone)
             {
                 // We are in both green zones! Take one with least "violation"
                 if (Math.Abs(previousShotChangeWithGreenZone - nextShotChange) > Math.Abs(nextShotChangeWithGreenZone - previousShotChange))
                 {
                     return (previousShotChangeWithGreenZone, FindBestCueResult.SnappedToRightGreenZone);
                 }
-                else
-                {
-                    return (nextShotChangeWithGreenZone, FindBestCueResult.SnappedToLeftGreenZone);
-                }
+
+                return (nextShotChangeWithGreenZone, FindBestCueResult.SnappedToLeftGreenZone);
             }
-            else
+            if (isInPreviousShotChangeRedZone)
             {
-                if (isInPreviousShotChangeRedZone)
-                {
-                    // Snap to previous shot change
-                    return (previousShotChange, FindBestCueResult.SnappedToRedZone);
-                }
-                else if (isInNextShotChangeRedZone)
-                {
-                    // Snap to next shot change
-                    return (nextShotChange, FindBestCueResult.SnappedToRedZone);
-                }
-                else if (isInPreviousShotChangeGreenZone)
-                {
-                    // Enforce green zone from previous shot change, but shouldn't exceed next shot change
-                    return (Math.Min(previousShotChangeWithGreenZone, nextShotChange), FindBestCueResult.SnappedToRightGreenZone);
-                }
-                else if (isInNextShotChangeGreenZone)
-                {
-                    // Enforce green zone from next shot change, but shouldn't exceed previous shot change
-                    return (Math.Max(nextShotChangeWithGreenZone, previousShotChange), FindBestCueResult.SnappedToLeftGreenZone);
-                }
+                // Snap to previous shot change
+                return (previousShotChange, FindBestCueResult.SnappedToRedZone);
+            }
+
+            if (isInNextShotChangeRedZone)
+            {
+                // Snap to next shot change
+                return (nextShotChange, FindBestCueResult.SnappedToRedZone);
+            }
+            if (isInPreviousShotChangeGreenZone)
+            {
+                // Enforce green zone from previous shot change, but shouldn't exceed next shot change
+                return (Math.Min(previousShotChangeWithGreenZone, nextShotChange), FindBestCueResult.SnappedToRightGreenZone);
+            }
+            if (isInNextShotChangeGreenZone)
+            {
+                // Enforce green zone from next shot change, but shouldn't exceed previous shot change
+                return (Math.Max(nextShotChangeWithGreenZone, previousShotChange), FindBestCueResult.SnappedToLeftGreenZone);
             }
 
             return (cueFrame, FindBestCueResult.NoShotChangeFound);
@@ -511,41 +506,35 @@ namespace Nikse.SubtitleEdit.Core.Forms
                     // Chain them
                     return rightInCueFrame - Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
                 }
-                else if (isInGreenZone)
+
+                if (isInGreenZone)
                 {
                     // Enforce green zone
                     return rightInCueWithGreenZone;
                 }
-                else
-                {
-                    // Chaining not needed
-                    return null;
-                }
+                // Chaining not needed
+                return null;
+            }
+
+            // No, so just check the distance in milliseconds (use original milliseconds if passed)
+            double distance;
+            if (leftParagraph != null && rightParagraph != null)
+            {
+                distance = rightParagraph.StartTime.TotalMilliseconds - leftParagraph.EndTime.TotalMilliseconds;
             }
             else
             {
-                // No, so just check the distance in milliseconds (use original milliseconds if passed)
-                double distance;
-                if (leftParagraph != null && rightParagraph != null)
-                {
-                    distance = rightParagraph.StartTime.TotalMilliseconds - leftParagraph.EndTime.TotalMilliseconds;
-                }
-                else
-                {
-                    distance = SubtitleFormat.FramesToMilliseconds(rightInCueFrame, _frameRate) - SubtitleFormat.FramesToMilliseconds(leftOutCueFrame, _frameRate);
-                }
-
-                if (distance < Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralMaxGap)
-                {
-                    // Chain them
-                    return rightInCueFrame - Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
-                }
-                else
-                {
-                    // Chaining not needed
-                    return null;
-                }
+                distance = SubtitleFormat.FramesToMilliseconds(rightInCueFrame, _frameRate) - SubtitleFormat.FramesToMilliseconds(leftOutCueFrame, _frameRate);
             }
+
+            if (distance < Configuration.Settings.BeautifyTimeCodes.Profile.ChainingGeneralMaxGap)
+            {
+                // Chain them
+                return rightInCueFrame - Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
+            }
+
+            // Chaining not needed
+            return null;
         }
 
         private int? GetFixedChainableSubtitlesLeftOutCueFrameInCueOnShot(int leftOutCueFrame, int rightInCueFrame)
@@ -562,32 +551,26 @@ namespace Nikse.SubtitleEdit.Core.Forms
                     // Chain them
                     return rightInCueFrame - Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
                 }
-                else if (isInGreenZone)
+
+                if (isInGreenZone)
                 {
                     // Enforce green zone
                     return rightInCueWithGreenZone;
                 }
-                else
-                {
-                    // Chaining not needed
-                    return null;
-                }
+                // Chaining not needed
+                return null;
             }
-            else
+
+            // No, so just check the distance in milliseconds
+            var distance = SubtitleFormat.FramesToMilliseconds(rightInCueFrame, _frameRate) - SubtitleFormat.FramesToMilliseconds(leftOutCueFrame, _frameRate);
+            if (distance < Configuration.Settings.BeautifyTimeCodes.Profile.ChainingInCueOnShotMaxGap)
             {
-                // No, so just check the distance in milliseconds
-                var distance = SubtitleFormat.FramesToMilliseconds(rightInCueFrame, _frameRate) - SubtitleFormat.FramesToMilliseconds(leftOutCueFrame, _frameRate);
-                if (distance < Configuration.Settings.BeautifyTimeCodes.Profile.ChainingInCueOnShotMaxGap)
-                {
-                    // Chain them
-                    return rightInCueFrame - Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
-                }
-                else
-                {
-                    // Chaining not needed
-                    return null;
-                }
+                // Chain them
+                return rightInCueFrame - Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
             }
+
+            // Chaining not needed
+            return null;
         }
 
         private int? GetFixedChainableSubtitlesRightInCueFrameOutCueOnShot(int leftOutCueFrame, int rightInCueFrame)
@@ -604,32 +587,26 @@ namespace Nikse.SubtitleEdit.Core.Forms
                     // Chain them
                     return leftOutCueFrame + Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
                 }
-                else if (isInGreenZone)
+
+                if (isInGreenZone)
                 {
                     // Enforce green zone
                     return leftOutCueWithGreenZone;
                 }
-                else
-                {
-                    // Chaining not needed
-                    return null;
-                }
+                // Chaining not needed
+                return null;
             }
-            else
+
+            // No, so just check the distance in milliseconds
+            var distance = SubtitleFormat.FramesToMilliseconds(rightInCueFrame, _frameRate) - SubtitleFormat.FramesToMilliseconds(leftOutCueFrame, _frameRate);
+            if (distance < Configuration.Settings.BeautifyTimeCodes.Profile.ChainingOutCueOnShotMaxGap)
             {
-                // No, so just check the distance in milliseconds
-                var distance = SubtitleFormat.FramesToMilliseconds(rightInCueFrame, _frameRate) - SubtitleFormat.FramesToMilliseconds(leftOutCueFrame, _frameRate);
-                if (distance < Configuration.Settings.BeautifyTimeCodes.Profile.ChainingOutCueOnShotMaxGap)
-                {
-                    // Chain them
-                    return leftOutCueFrame + Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
-                }
-                else
-                {
-                    // Chaining not needed
-                    return null;
-                }
+                // Chain them
+                return leftOutCueFrame + Configuration.Settings.BeautifyTimeCodes.Profile.Gap;
             }
+
+            // Chaining not needed
+            return null;
         }
 
         private void FixInCue(int index)
@@ -743,46 +720,41 @@ namespace Nikse.SubtitleEdit.Core.Forms
                 {
                     return (previousShotChangeWithGap, FindBestCueResult.SnappedToRedZone);
                 }
-                else
-                {
-                    return (nextShotChangeWithGap, FindBestCueResult.SnappedToRedZone);
-                }
+
+                return (nextShotChangeWithGap, FindBestCueResult.SnappedToRedZone);
             }
-            else if (isInPreviousShotChangeGreenZone && isInNextShotChangeGreenZone)
+
+            if (isInPreviousShotChangeGreenZone && isInNextShotChangeGreenZone)
             {
                 // We are in both green zones! Take one with least "violation"
                 if (Math.Abs(previousShotChangeWithGreenZone - nextShotChange) > Math.Abs(nextShotChangeWithGreenZone - previousShotChange))
                 {
                     return (previousShotChangeWithGreenZone, FindBestCueResult.SnappedToRightGreenZone);
                 }
-                else
-                {
-                    return (nextShotChangeWithGreenZone, FindBestCueResult.SnappedToLeftGreenZone);
-                }
+
+                return (nextShotChangeWithGreenZone, FindBestCueResult.SnappedToLeftGreenZone);
             }
-            else
+            // Other cases... Red zone snapping has priority
+            if (isInPreviousShotChangeRedZone)
             {
-                // Other cases... Red zone snapping has priority
-                if (isInPreviousShotChangeRedZone)
-                {
-                    // Snap to previous shot change
-                    return (previousShotChangeWithGap, FindBestCueResult.SnappedToRedZone);
-                }
-                else if (isInNextShotChangeRedZone)
-                {
-                    // Snap to next shot change
-                    return (nextShotChangeWithGap, FindBestCueResult.SnappedToRedZone);
-                }
-                else if (isInPreviousShotChangeGreenZone)
-                {
-                    // Enforce green zone from previous shot change, but shouldn't exceed next shot change
-                    return (Math.Min(previousShotChangeWithGreenZone, nextShotChange), FindBestCueResult.SnappedToRightGreenZone);
-                }
-                else if (isInNextShotChangeGreenZone)
-                {
-                    // Enforce green zone from next shot change, but shouldn't exceed previous shot change
-                    return (Math.Max(nextShotChangeWithGreenZone, previousShotChange), FindBestCueResult.SnappedToLeftGreenZone);
-                }
+                // Snap to previous shot change
+                return (previousShotChangeWithGap, FindBestCueResult.SnappedToRedZone);
+            }
+
+            if (isInNextShotChangeRedZone)
+            {
+                // Snap to next shot change
+                return (nextShotChangeWithGap, FindBestCueResult.SnappedToRedZone);
+            }
+            if (isInPreviousShotChangeGreenZone)
+            {
+                // Enforce green zone from previous shot change, but shouldn't exceed next shot change
+                return (Math.Min(previousShotChangeWithGreenZone, nextShotChange), FindBestCueResult.SnappedToRightGreenZone);
+            }
+            if (isInNextShotChangeGreenZone)
+            {
+                // Enforce green zone from next shot change, but shouldn't exceed previous shot change
+                return (Math.Max(nextShotChangeWithGreenZone, previousShotChange), FindBestCueResult.SnappedToLeftGreenZone);
             }
 
             return (cueFrame, FindBestCueResult.NoShotChangeFound);
@@ -861,15 +833,11 @@ namespace Nikse.SubtitleEdit.Core.Forms
                 {
                     return cueFrame >= closestShotChangeFrame.Value && cueFrame <= closestShotChangeFrame.Value + Configuration.Settings.BeautifyTimeCodes.Profile.InCuesGap;
                 }
-                else
-                {
-                    return cueFrame <= closestShotChangeFrame.Value && cueFrame >= closestShotChangeFrame.Value - Configuration.Settings.BeautifyTimeCodes.Profile.OutCuesGap;
-                }
+
+                return cueFrame <= closestShotChangeFrame.Value && cueFrame >= closestShotChangeFrame.Value - Configuration.Settings.BeautifyTimeCodes.Profile.OutCuesGap;
             }
-            else
-            {
-                return false;
-            }
+
+            return false;
         }
 
 

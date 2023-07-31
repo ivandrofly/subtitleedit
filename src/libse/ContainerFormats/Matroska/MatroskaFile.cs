@@ -529,10 +529,8 @@ namespace Nikse.SubtitleEdit.Core.ContainerFormats.Matroska
                 {
                     return ReadString((int)element.DataSize, Encoding.UTF8);
                 }
-                else
-                {
-                    _stream.Seek(element.DataSize, SeekOrigin.Current);
-                }
+
+                _stream.Seek(element.DataSize, SeekOrigin.Current);
             }
 
             return null;

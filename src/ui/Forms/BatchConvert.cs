@@ -2924,7 +2924,8 @@ namespace Nikse.SubtitleEdit.Forms
             {
                 return movieFileName;
             }
-            else if (fileNameNoExtension.Contains('.'))
+
+            if (fileNameNoExtension.Contains('.'))
             {
                 fileNameNoExtension = fileNameNoExtension.Substring(0, fileNameNoExtension.LastIndexOf('.'));
                 return TryToFindVideoFile(fileNameNoExtension);

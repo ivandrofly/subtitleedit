@@ -138,10 +138,8 @@ namespace Nikse.SubtitleEdit.Core.Common
             {
                 return new ParserException(string.Format(CultureInfo.InvariantCulture, "Parse error: {0} at line {1}, column {2}.", msg, Line, Col), Line, Col);
             }
-            else
-            {
-                return new ParserException("Parse error: " + msg + ".", 0, 0);
-            }
+
+            return new ParserException("Parse error: " + msg + ".", 0, 0);
         }
 
         private void AdvanceInput(int n)
@@ -212,24 +210,22 @@ namespace Nikse.SubtitleEdit.Core.Common
                 AdvanceInput(1);
                 return String();
             }
-            else if (nextChar == '[')
+
+            if (nextChar == '[')
             {
                 AdvanceInput(1);
                 return List();
             }
-            else if (nextChar == '{')
+            if (nextChar == '{')
             {
                 AdvanceInput(1);
                 return Dictionary();
             }
-            else if (char.IsDigit(nextChar) || nextChar == '-')
+            if (char.IsDigit(nextChar) || nextChar == '-')
             {
                 return Number();
             }
-            else
-            {
-                return Literal();
-            }
+            return Literal();
         }
 
         private object Number()
@@ -263,38 +259,32 @@ namespace Nikse.SubtitleEdit.Core.Common
                     AdvanceInput(len);
                     return d;
                 }
-                else
-                {
-                    if (double.TryParse(num, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out var dbl))
-                    {
-                        WriteLineLog("double: {0}", dbl);
-                        AdvanceInput(len);
-                        return dbl;
-                    }
 
-                    throw BuildParserException("cannot parse decimal number");
-                }
-            }
-            else
-            {
-                if (int.TryParse(num, NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out var i))
+                if (double.TryParse(num, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out var dbl))
                 {
-                    WriteLineLog("int: {0}", i);
+                    WriteLineLog("double: {0}", dbl);
                     AdvanceInput(len);
-                    return i;
+                    return dbl;
                 }
-                else
-                {
-                    if (long.TryParse(num, NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out var l))
-                    {
-                        WriteLineLog("long: {0}", l);
-                        AdvanceInput(len);
-                        return l;
-                    }
 
-                    throw BuildParserException("cannot parse integer number");
-                }
+                throw BuildParserException("cannot parse decimal number");
             }
+
+            if (int.TryParse(num, NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out var i))
+            {
+                WriteLineLog("int: {0}", i);
+                AdvanceInput(len);
+                return i;
+            }
+
+            if (long.TryParse(num, NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out var l))
+            {
+                WriteLineLog("long: {0}", l);
+                AdvanceInput(len);
+                return l;
+            }
+
+            throw BuildParserException("cannot parse integer number");
         }
 
         private bool Accept(Predicate<char> predicate, ref int pos)
@@ -343,7 +333,8 @@ namespace Nikse.SubtitleEdit.Core.Common
                     WriteLineLog("string: {0}", sb);
                     return sb.ToString();
                 }
-                else if (c == '\\')
+
+                if (c == '\\')
                 {
                     currentPos++;
 
@@ -382,15 +373,13 @@ namespace Nikse.SubtitleEdit.Core.Common
                             {
                                 throw BuildParserException("unterminated unicode escape in string");
                             }
-                            else
-                            {
-                                if (!int.TryParse(Input.Substring(currentPos - 3, 4), NumberStyles.AllowHexSpecifier, NumberFormatInfo.InvariantInfo, out var u))
-                                {
-                                    throw BuildParserException("not a well-formed unicode escape sequence in string");
-                                }
 
-                                sb.Append((char)u);
+                            if (!int.TryParse(Input.Substring(currentPos - 3, 4), NumberStyles.AllowHexSpecifier, NumberFormatInfo.InvariantInfo, out var u))
+                            {
+                                throw BuildParserException("not a well-formed unicode escape sequence in string");
                             }
+
+                            sb.Append((char)u);
                             break;
                         default:
                             throw BuildParserException("unknown escape sequence in string");

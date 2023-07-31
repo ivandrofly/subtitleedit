@@ -709,7 +709,8 @@ Dialogue: -255,0:00:00.00,0:43:00.00,SE-progress-bar-bg,,0,0,0,,[PB_DRAWING]";
                 }
                 return (int)Math.Round((position + positionNextX) / 2.0 + (double)numericUpDownXAdjust.Value);
             }
-            else if (comboBoxTextHorizontalAlignment.SelectedIndex == 2) // right
+
+            if (comboBoxTextHorizontalAlignment.SelectedIndex == 2) // right
             {
                 var positionNextX = _videoInfo.Width * 100.0 / 100.0;
                 var next = _chapters.GetParagraphOrDefault(i + 1);

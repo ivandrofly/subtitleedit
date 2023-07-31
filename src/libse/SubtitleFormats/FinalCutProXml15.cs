@@ -71,34 +71,36 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             {
                 return "1001/24000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 24) < 0.01)
+
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 24) < 0.01)
             {
                 return "1/24s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 25) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 25) < 0.01)
             {
                 return "1/25s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 29.97) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 29.97) < 0.01)
             {
                 return "1001/30000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 30) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 30) < 0.01)
             {
                 return "1/30s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 50) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 50) < 0.01)
             {
                 return "1/50s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 59.94) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 59.94) < 0.01)
             {
                 return "1001/60000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 60) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 60) < 0.01)
             {
                 return "1/60s";
             }
+
             return "1/25s";
         }
 
@@ -108,34 +110,36 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             {
                 return Convert.ToInt64(timeCode.TotalSeconds * 2400000) + "/2400000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 24) < 0.01)
+
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 24) < 0.01)
             {
                 return Convert.ToInt64(timeCode.TotalSeconds * 2400000) + "/2400000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 25) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 25) < 0.01)
             {
                 return Convert.ToInt64(timeCode.TotalSeconds * 2500000) + "/2500000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 29.97) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 29.97) < 0.01)
             {
                 return Convert.ToInt64(timeCode.TotalSeconds * 3000000) + "/3000000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 30) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 30) < 0.01)
             {
                 return Convert.ToInt64(timeCode.TotalSeconds * 3000000) + "/3000000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 50) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 50) < 0.01)
             {
                 return Convert.ToInt64(timeCode.TotalSeconds * 5000000) + "/5000000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 59.94) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 59.94) < 0.01)
             {
                 return Convert.ToInt64(timeCode.TotalSeconds * 6000000) + "/6000000s";
             }
-            else if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 60) < 0.01)
+            if (Math.Abs(Configuration.Settings.General.CurrentFrameRate - 60) < 0.01)
             {
                 return Convert.ToInt64(timeCode.TotalSeconds * 6000000) + "/6000000s";
             }
+
             return Convert.ToInt64(timeCode.TotalSeconds * 2500000) + "/2500000s";
         }
 

@@ -7103,7 +7103,8 @@ namespace Nikse.SubtitleEdit.Forms.Ocr
                         comboBoxOcrMethod.SelectedIndex = _ocrMethodBinaryImageCompare;
                         return;
                     }
-                    else if (MessageBox.Show($"{LanguageSettings.Current.GetTesseractDictionaries.Download} Tesseract {Tesseract5Version}", LanguageSettings.Current.General.Title, MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
+
+                    if (MessageBox.Show($"{LanguageSettings.Current.GetTesseractDictionaries.Download} Tesseract {Tesseract5Version}", LanguageSettings.Current.General.Title, MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
                     {
                         comboBoxTesseractLanguages.Items.Clear();
                         using (var form = new DownloadTesseract5(Tesseract5Version))

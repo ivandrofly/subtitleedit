@@ -57,7 +57,8 @@ namespace Nikse.SubtitleEdit.Core.Common
             {
                 return 0;
             }
-            else if (obj.Text == null)
+
+            if (obj.Text == null)
             {
                 return -1;
             }

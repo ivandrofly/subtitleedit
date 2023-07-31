@@ -193,15 +193,11 @@ namespace Nikse.SubtitleEdit.Core.Common
                 {
                     return currentFrame >= closestShotChangeFrame && currentFrame <= closestShotChangeFrame + Configuration.Settings.BeautifyTimeCodes.Profile.InCuesGap;
                 }
-                else
-                {
-                    return currentFrame <= closestShotChangeFrame && currentFrame >= closestShotChangeFrame - Configuration.Settings.BeautifyTimeCodes.Profile.OutCuesGap;
-                }
+
+                return currentFrame <= closestShotChangeFrame && currentFrame >= closestShotChangeFrame - Configuration.Settings.BeautifyTimeCodes.Profile.OutCuesGap;
             }
-            else
-            {
-                return false;
-            }
+
+            return false;
         }
     }
 }

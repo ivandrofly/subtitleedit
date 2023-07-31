@@ -1311,7 +1311,8 @@ namespace Nikse.SubtitleEdit.Forms
             {
                 return false;
             }
-            else if (replaceWord.EndsWith('"') && !replaceWord.EndsWith("\"\"", StringComparison.Ordinal) && wordPlusOne == replaceWord)
+
+            if (replaceWord.EndsWith('"') && !replaceWord.EndsWith("\"\"", StringComparison.Ordinal) && wordPlusOne == replaceWord)
             {
                 return false;
             }

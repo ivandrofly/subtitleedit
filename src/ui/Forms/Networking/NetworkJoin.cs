@@ -68,20 +68,18 @@ namespace Nikse.SubtitleEdit.Forms.Networking
                     DialogResult = DialogResult.OK;
                     return;
                 }
+
+                if (message == "Session not found!")
+                {
+                    MessageBox.Show(string.Format(LanguageSettings.Current.Main.XNotFound, textBoxSessionKey.Text));
+                }
+                else if (message == "Username already in use!")
+                {
+                    MessageBox.Show(string.Format(LanguageSettings.Current.General.UserNameAlreadyInUse, textBoxSessionKey.Text));
+                }
                 else
                 {
-                    if (message == "Session not found!")
-                    {
-                        MessageBox.Show(string.Format(LanguageSettings.Current.Main.XNotFound, textBoxSessionKey.Text));
-                    }
-                    else if (message == "Username already in use!")
-                    {
-                        MessageBox.Show(string.Format(LanguageSettings.Current.General.UserNameAlreadyInUse, textBoxSessionKey.Text));
-                    }
-                    else
-                    {
-                        MessageBox.Show(message);
-                    }
+                    MessageBox.Show(message);
                 }
             }
             catch (Exception exception)

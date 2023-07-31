@@ -77,7 +77,8 @@ namespace Nikse.SubtitleEdit.Core.VobSub
                 int b = Convert.ToInt32(hex.Substring(4, 2), 16);
                 return Color.FromArgb(r, g, b);
             }
-            else if (hex.Length == 8)
+
+            if (hex.Length == 8)
             {
                 int a = Convert.ToInt32(hex.Substring(0, 2), 16);
                 int r = Convert.ToInt32(hex.Substring(2, 2), 16);

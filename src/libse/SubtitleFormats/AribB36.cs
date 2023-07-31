@@ -115,12 +115,10 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                         var milliseconds = int.Parse(s.Substring(6, 3));
                         return new TimeCode(hours, minutes, seconds, milliseconds);
                     }
-                    else
-                    {
-                        //HHMMSSXXF (last 'F' is hardcoded, XX=frames)
-                        var frames = int.Parse(s.Substring(6, 2));
-                        return new TimeCode(hours, minutes, seconds, FramesToMillisecondsMax999(frames));
-                    }
+
+                    //HHMMSSXXF (last 'F' is hardcoded, XX=frames)
+                    var frames = int.Parse(s.Substring(6, 2));
+                    return new TimeCode(hours, minutes, seconds, FramesToMillisecondsMax999(frames));
                 }
                 return new TimeCode();
             }

@@ -97,7 +97,8 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                         {
                             break;
                         }
-                        else if (buffer[j] == 0xd)
+
+                        if (buffer[j] == 0xd)
                         {
                             sb.AppendLine();
                             j += 3;

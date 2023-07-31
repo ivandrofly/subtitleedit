@@ -44,7 +44,8 @@ namespace Nikse.SubtitleEdit.Core.NetflixQualityCheck
                             return 17;
                     }
                 }
-                else if (IsChildrenProgram)
+
+                if (IsChildrenProgram)
                 {
                     switch (Language)
                     {
@@ -63,7 +64,7 @@ namespace Nikse.SubtitleEdit.Core.NetflixQualityCheck
                             return 13;
                     }
                 }
-                else if (IsSDH)
+                if (IsSDH)
                 {
                     switch (Language)
                     {
@@ -81,24 +82,21 @@ namespace Nikse.SubtitleEdit.Core.NetflixQualityCheck
                             return 20;
                     }
                 }
-                else
+                switch (Language)
                 {
-                    switch (Language)
-                    {
-                        case "ar": // Arabic
-                        case "en": // English
-                            return 20;
-                        case "hi": // Hindi
-                            return 22;
-                        case "ja": // Japanese
-                            return 4;
-                        case "ko": // Korean
-                            return 12;
-                        case "zh": // Chinese
-                            return 9;
-                        default:
-                            return 17;
-                    }
+                    case "ar": // Arabic
+                    case "en": // English
+                        return 20;
+                    case "hi": // Hindi
+                        return 22;
+                    case "ja": // Japanese
+                        return 4;
+                    case "ko": // Korean
+                        return 12;
+                    case "zh": // Chinese
+                        return 9;
+                    default:
+                        return 17;
                 }
             }
         }
@@ -168,11 +166,12 @@ namespace Nikse.SubtitleEdit.Core.NetflixQualityCheck
                     {
                         return false;
                     }
-                    else if (Language == "ko") // Korean
+
+                    if (Language == "ko") // Korean
                     {
                         return false;
                     }
-                    else if (Language == "zh") // Chinese
+                    if (Language == "zh") // Chinese
                     {
                         return false;
                     }

@@ -48,10 +48,8 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
 
                 return $"{time.Hours:00}:{time.Minutes:00}:{time.Seconds:00}:{frames:00}";
             }
-            else
-            {
-                return time.ToHHMMSSFF();
-            }
+
+            return time.ToHHMMSSFF();
         }
 
         public override void LoadSubtitle(Subtitle subtitle, List<string> lines, string fileName)

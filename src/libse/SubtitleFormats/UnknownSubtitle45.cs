@@ -103,7 +103,8 @@ ST 0 EB 3.10
                     {
                         return; // wrong format
                     }
-                    else if (string.IsNullOrEmpty(p.Text))
+
+                    if (string.IsNullOrEmpty(p.Text))
                     {
                         p.Text = line;
                     }

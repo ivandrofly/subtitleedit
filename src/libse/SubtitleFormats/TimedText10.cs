@@ -993,7 +993,8 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             {
                 return node.Attributes[attr, @namespace].InnerText;
             }
-            else if (node.Attributes[attr] != null)
+
+            if (node.Attributes[attr] != null)
             {
                 return node.Attributes[attr].InnerText;
             }

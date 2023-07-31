@@ -738,10 +738,8 @@ namespace Nikse.SubtitleEdit.Forms.Ocr
                         {
                             break;
                         }
-                        else
-                        {
-                            end = new Point(r.Next(nOcrChar.Width), r.Next(nOcrChar.Height));
-                        }
+
+                        end = new Point(r.Next(nOcrChar.Width), r.Next(nOcrChar.Height));
                     }
                 }
                 else if (hits < 30 && count < 2000) // some medium lines
@@ -764,10 +762,8 @@ namespace Nikse.SubtitleEdit.Forms.Ocr
                         {
                             break;
                         }
-                        else
-                        {
-                            end = new Point(r.Next(nOcrChar.Width), r.Next(nOcrChar.Height));
-                        }
+
+                        end = new Point(r.Next(nOcrChar.Width), r.Next(nOcrChar.Height));
                     }
                 }
 

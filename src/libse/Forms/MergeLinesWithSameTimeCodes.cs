@@ -122,10 +122,8 @@ namespace Nikse.SubtitleEdit.Core.Forms
                         return (line1.StartsWith("- ") ? "" : "- ") + line1 + Environment.NewLine + "- " + line2;
                 }
             }
-            else
-            {
-                return line1 + Environment.NewLine + line2;
-            }
+
+            return line1 + Environment.NewLine + line2;
         }
 
         private static bool QualifiesForMerge(Paragraph p, Paragraph next, int maxMsBetween)

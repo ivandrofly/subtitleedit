@@ -113,16 +113,14 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                         _errorCount += 100;
                         return;
                     }
-                    else
-                    {
-                        if (line.StartsWith("||"))
-                        {
-                            line = "<i>" + line.Replace("||", string.Empty) + "</i>";
-                        }
 
-                        p.Text = line.Trim();
-                        expecting = ExpectingLine.Text2;
+                    if (line.StartsWith("||"))
+                    {
+                        line = "<i>" + line.Replace("||", string.Empty) + "</i>";
                     }
+
+                    p.Text = line.Trim();
+                    expecting = ExpectingLine.Text2;
                 }
                 else if (expecting == ExpectingLine.Text2)
                 {
@@ -131,16 +129,14 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                         _errorCount += 100;
                         return;
                     }
-                    else
-                    {
-                        if (line.StartsWith("||", StringComparison.Ordinal))
-                        {
-                            line = "<i>" + line.Replace("||", string.Empty) + "</i>";
-                        }
 
-                        p.Text = (p.Text + Environment.NewLine + line).Trim();
-                        expecting = ExpectingLine.TimeCodes;
+                    if (line.StartsWith("||", StringComparison.Ordinal))
+                    {
+                        line = "<i>" + line.Replace("||", string.Empty) + "</i>";
                     }
+
+                    p.Text = (p.Text + Environment.NewLine + line).Trim();
+                    expecting = ExpectingLine.TimeCodes;
                 }
             }
             if (!string.IsNullOrWhiteSpace(p.Text))
