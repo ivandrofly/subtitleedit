@@ -1211,40 +1211,36 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return false;
             }
 
-            if (!text.Contains(startTag) || !text.Contains(endTag))
+            // fix extra spaces
+            text = text.FixExtraSpaces();
+
+            var len = text.Length;
+            var endTagLen = endTag.Length;
+
+            var endIndex = text.Length - 1;
+            // skip closing symbols
+            while (endIndex - (endTagLen - 1) > 0 && text[endIndex] == '.' || text[endIndex] == '!' || text[endIndex] == '?' || text[endIndex] == '-') endIndex--;
+
+            // foobar</i>.
+            // remove the already -1 from the `while` above so we can just end - end.length
+            endIndex -= endTag.Length - 1;
+            if (endIndex < 0 || text[endIndex] != endTag[0]) return false;
+
+            var startIndex = 0;
+            // skip open symbols (dialog)
+            if (text[startIndex] == '-')
             {
-                return false;
+                while (startIndex < len && text[startIndex] == '.' || text[startIndex] == ' ') startIndex++;
             }
 
-            while (text.Contains("  "))
-            {
-                text = text.Replace("  ", " ");
-            }
+            // start tag not found at the beginning
+            if (startIndex >= len || text[startIndex] != startTag[0]) return false;
 
-            var s1 = "- " + startTag;
-            var s2 = "-" + startTag;
-            var s3 = "- ..." + startTag;
-            var s4 = "- " + startTag + "..."; // - <i>...
+            // use Spans when in .net core/.net >= 2.1
+            var tagIsPresentInBeginning = text.Substring(startIndex, startTag.Length).Equals(startTag, StringComparison.OrdinalIgnoreCase);
+            var tagIsPresentAtEnd = text.Substring(endIndex, endTagLen).Equals(endTag, StringComparison.OrdinalIgnoreCase);
 
-            var e1 = endTag + ".";
-            var e2 = endTag + "!";
-            var e3 = endTag + "?";
-            var e4 = endTag + "...";
-            var e5 = endTag + "-";
-
-            bool isStart = false;
-            bool isEnd = false;
-            if (text.StartsWith(startTag, StringComparison.Ordinal) || text.StartsWith(s1, StringComparison.Ordinal) || text.StartsWith(s2, StringComparison.Ordinal) || text.StartsWith(s3, StringComparison.Ordinal) || text.StartsWith(s4, StringComparison.Ordinal))
-            {
-                isStart = true;
-            }
-
-            if (text.EndsWith(endTag, StringComparison.Ordinal) || text.EndsWith(e1, StringComparison.Ordinal) || text.EndsWith(e2, StringComparison.Ordinal) || text.EndsWith(e3, StringComparison.Ordinal) || text.EndsWith(e4, StringComparison.Ordinal) || text.EndsWith(e5, StringComparison.Ordinal))
-            {
-                isEnd = true;
-            }
-
-            return isStart && isEnd;
+            return tagIsPresentInBeginning && tagIsPresentAtEnd;
         }
 
         public static Paragraph GetOriginalParagraph(int index, Paragraph paragraph, List<Paragraph> originalParagraphs)
