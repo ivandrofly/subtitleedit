@@ -214,11 +214,6 @@ namespace Nikse.SubtitleEdit.Forms
 
             var name = listViewNames.SelectedItems[0].SubItems[1].Text;
 
-            if (name.Length == 1)
-            {
-                return;
-            }
-
             listViewFixes.BeginUpdate();
 
             foreach (ListViewItem item in listViewFixes.Items)
