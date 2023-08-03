@@ -168,13 +168,6 @@ namespace Nikse.SubtitleEdit.Forms
                     
                     if (isNotEmbeddedNotFoundNotSameCasing)
                     {
-                        // culture specific filter
-                        // todo: this type of word should be handled in names.xml blacklist
-                        // if (_language.StartsWith("en", StringComparison.OrdinalIgnoreCase))
-                        // {
-                        //     text.Substring(startIndex).StartsWith("don't", StringComparison.InvariantCultureIgnoreCase);
-                        // }
-
                         foundNameLookup.Add(name);
 
                         // add to found name listview
