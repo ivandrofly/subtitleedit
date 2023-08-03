@@ -10,7 +10,6 @@ namespace Nikse.SubtitleEdit.Forms
 {
     public sealed partial class ChangeCasingNames : Form
     {
-        private readonly HashSet<string> _usedNames = new HashSet<string>();
         private Subtitle _subtitle;
         private const string ExpectedEndChars = " ,.!?:;')]<-\"\r\n";
         private NameList _nameList;
@@ -61,14 +60,7 @@ namespace Nikse.SubtitleEdit.Forms
                 DialogResult = DialogResult.Cancel;
             }
         }
-
-        private void AddToListViewNames(string name)
-        {
-            var item = new ListViewItem(string.Empty) { Checked = true };
-            item.SubItems.Add(name);
-            listViewNames.Items.Add(item);
-        }
-
+        
         public void Initialize(Subtitle subtitle)
         {
             _subtitle = subtitle;
@@ -154,48 +146,63 @@ namespace Nikse.SubtitleEdit.Forms
 
         private void FindAllNames()
         {
-            string text = HtmlUtil.RemoveHtmlTags(_subtitle.GetAllTexts());
-            string textToLower = text.ToLowerInvariant();
+            var text = HtmlUtil.RemoveHtmlTags(_subtitle.GetAllTexts());
+
             listViewNames.BeginUpdate();
+            var foundNameLookup = new HashSet<string>();
+
             foreach (var name in _nameListInclMulti)
             {
-                int startIndex = textToLower.IndexOf(name.ToLowerInvariant(), StringComparison.Ordinal);
-                if (startIndex >= 0)
+                // To short, number only or all lowercase
+                if (name.Length == 1 || name == name.ToLowerInvariant())
                 {
-                    while (startIndex >= 0 && startIndex < text.Length &&
-                           textToLower.Substring(startIndex).Contains(name.ToLowerInvariant()) && name.Length > 1 && name != name.ToLowerInvariant())
+                    continue;
+                }
+
+                var startIndex = text.IndexOf(name, StringComparison.OrdinalIgnoreCase);
+
+                while (startIndex >= 0)
+                {
+                    var isNotEmbeddedNotFoundNotSameCasing = !IsEmbeddedWord(text, name, startIndex) &&
+                                                             !foundNameLookup.Contains(name) && 
+                                                             text.Substring(startIndex, name.Length) != name;
+                    
+                    if (isNotEmbeddedNotFoundNotSameCasing)
                     {
-                        bool startOk = startIndex == 0 || "([ --'>\r\n¿¡\"”“„".Contains(text[startIndex - 1]);
-                        if (startOk)
+                        // culture specific filter
+                        // todo: this type of word should be handled in names.xml blacklist
+                        // if (_language.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+                        // {
+                        //     text.Substring(startIndex).StartsWith("don't", StringComparison.InvariantCultureIgnoreCase);
+                        // }
+
+                        foundNameLookup.Add(name);
+
+                        // add to found name listview
+                        listViewNames.Items.Add(new ListViewItem(string.Empty)
                         {
-                            int end = startIndex + name.Length;
-                            bool endOk = end <= text.Length;
-                            if (endOk)
-                            {
-                                endOk = end == text.Length || ExpectedEndChars.Contains(text[end]);
-                            }
-
-                            if (endOk && text.Substring(startIndex, name.Length) != name) // do not add names where casing already is correct
-                            {
-                                if (!_usedNames.Contains(name))
-                                {
-                                    var isDont = _language.StartsWith("en", StringComparison.OrdinalIgnoreCase) && text.Substring(startIndex).StartsWith("don't", StringComparison.InvariantCultureIgnoreCase);
-                                    if (!isDont)
-                                    {
-                                        _usedNames.Add(name);
-                                        AddToListViewNames(name);
-                                        break; // break while
-                                    }
-                                }
-                            }
-                        }
-
-                        startIndex = textToLower.IndexOf(name.ToLowerInvariant(), startIndex + 2, StringComparison.Ordinal);
+                            Checked = true,
+                            SubItems = { name }
+                        });
+                        break; // break while
                     }
+
+                    startIndex = text.IndexOf(name, startIndex + name.Length, StringComparison.OrdinalIgnoreCase);
                 }
             }
+
             listViewNames.EndUpdate();
             groupBoxNames.Text = string.Format(LanguageSettings.Current.ChangeCasingNames.NamesFoundInSubtitleX, listViewNames.Items.Count);
+        }
+
+        private static bool IsEmbeddedWord(string text, string name, int nameStartIndexInText)
+        {
+            if (nameStartIndexInText > 0 && char.IsLetterOrDigit(text[nameStartIndexInText - 1]))
+            {
+                return true;
+            }
+            var nameEndIndexInText = nameStartIndexInText + name.Length;
+            return nameEndIndexInText < text.Length && char.IsLetterOrDigit(text[nameEndIndexInText]);
         }
 
         private void ListViewNamesSelectedIndexChanged(object sender, EventArgs e)
