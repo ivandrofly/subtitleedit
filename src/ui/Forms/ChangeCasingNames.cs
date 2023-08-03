@@ -11,7 +11,6 @@ namespace Nikse.SubtitleEdit.Forms
     public sealed partial class ChangeCasingNames : Form
     {
         private Subtitle _subtitle;
-        private const string ExpectedEndChars = " ,.!?:;')]<-\"\r\n";
         private NameList _nameList;
         private List<string> _nameListInclMulti;
         private string _language;
@@ -213,37 +212,19 @@ namespace Nikse.SubtitleEdit.Forms
                 return;
             }
 
-            string name = listViewNames.SelectedItems[0].SubItems[1].Text;
+            var name = listViewNames.SelectedItems[0].SubItems[1].Text;
+
+            if (name.Length == 1)
+            {
+                return;
+            }
+
             listViewFixes.BeginUpdate();
 
             foreach (ListViewItem item in listViewFixes.Items)
             {
-                item.Selected = false;
-
-                string text = UiUtil.GetStringFromListViewText(item.SubItems[2].Text);
-
-                string lower = text.ToLowerInvariant();
-                if (lower.Contains(name.ToLowerInvariant()) && name.Length > 1 && name != name.ToLowerInvariant())
-                {
-                    int start = lower.IndexOf(name.ToLowerInvariant(), StringComparison.Ordinal);
-                    if (start >= 0)
-                    {
-                        bool startOk = start == 0 || lower[start - 1] == ' ' || lower[start - 1] == '-' || lower[start - 1] == '"' ||
-                                       lower[start - 1] == '\'' || lower[start - 1] == '>' || Environment.NewLine.EndsWith(lower[start - 1]);
-
-                        if (startOk)
-                        {
-                            int end = start + name.Length;
-                            bool endOk = end <= lower.Length;
-                            if (endOk)
-                            {
-                                endOk = end == lower.Length || ExpectedEndChars.Contains(lower[end]);
-                            }
-
-                            item.Selected = endOk;
-                        }
-                    }
-                }
+                var text = UiUtil.GetStringFromListViewText(item.SubItems[2].Text);
+                item.Selected = ShouldSelect(text, name);
             }
 
             listViewFixes.EndUpdate();
@@ -252,6 +233,22 @@ namespace Nikse.SubtitleEdit.Forms
             {
                 listViewFixes.EnsureVisible(listViewFixes.SelectedItems[0].Index);
             }
+        }
+
+        private static bool ShouldSelect(string text, string name)
+        {
+            var start = text.IndexOf(name, StringComparison.OrdinalIgnoreCase);
+            while (start >= 0)
+            {
+                if (!IsEmbeddedWord(text, name, start))
+                {
+                    return true;
+                }
+
+                start = text.IndexOf(name, start + name.Length, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return false;
         }
 
         private void ListViewNamesItemChecked(object sender, ItemCheckedEventArgs e)
