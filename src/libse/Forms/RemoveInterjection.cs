@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Nikse.SubtitleEdit.Core.Forms
@@ -554,33 +555,32 @@ namespace Nikse.SubtitleEdit.Core.Forms
 
             if (lines.Count == 1 && text != oldText && Utilities.GetNumberOfLines(oldText) == 2)
             {
-                if ((oldText.StartsWith('-') || oldText.StartsWith("<i>-", StringComparison.Ordinal)) &&
-                    (oldText.Contains("." + Environment.NewLine) || oldText.Contains(".</i>" + Environment.NewLine) ||
-                     oldText.Contains("!" + Environment.NewLine) || oldText.Contains("!</i>" + Environment.NewLine) ||
-                     oldText.Contains("?" + Environment.NewLine) || oldText.Contains("?</i>" + Environment.NewLine)))
+                var oldTextLines = oldText.SplitToLines();
+                const int firstLineIndex = 0;
+                
+                // any of the line in old text has hyphen and the first line is closed then remove
+                // any leftover hyphen in the text
+                if (oldTextLines.Any(HasStartHyphen) && oldTextLines[firstLineIndex].HasSentenceEnding())
                 {
-                    if (text.StartsWith("<i>-", StringComparison.Ordinal))
+                    var firstChar = text[0];
+                    var startFromIndex = 0;
+                    
+                    // look for tag at the begining of the text
+                    if (firstChar == '<')
                     {
-                        text = "<i>" + text.Remove(0, 4).TrimStart();
+                        startFromIndex = text.IndexOf('>') + 1;
                     }
-                    else
+
+                    var tags = string.Empty;
+                    
+                    // we have tags before hyphen index
+                    if (startFromIndex > 0)
                     {
-                        text = text.TrimStart('-').TrimStart();
+                        tags = text.Substring(0, startFromIndex);
                     }
-                }
-                else if ((oldText.Contains(Environment.NewLine + "-") || oldText.Contains(Environment.NewLine + "<i>-")) &&
-                         (oldText.Contains("." + Environment.NewLine) || oldText.Contains(".</i>" + Environment.NewLine) ||
-                          oldText.Contains("!" + Environment.NewLine) || oldText.Contains("!</i>" + Environment.NewLine) ||
-                          oldText.Contains("?" + Environment.NewLine) || oldText.Contains("?</i>" + Environment.NewLine)))
-                {
-                    if (text.StartsWith("<i>-", StringComparison.Ordinal))
-                    {
-                        text = "<i>" + text.Remove(0, 4).TrimStart();
-                    }
-                    else
-                    {
-                        text = text.TrimStart('-').TrimStart();
-                    }
+
+                    // add tag if present otherwise j
+                    text = startFromIndex > 0 ? tags + text.Substring(startFromIndex).TrimStart('-') : text.Substring(startFromIndex).TrimStart('-');
                 }
             }
 
@@ -638,6 +638,26 @@ namespace Nikse.SubtitleEdit.Core.Forms
             }
 
             return text;
+        }
+        
+        private static bool HasStartHyphen(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return false;
+
+            var beginChar = line[0];
+
+            // potential italic start
+            var checkIndex = 0;
+            if (beginChar == '<')
+            {
+                checkIndex = line.IndexOf('>', 1) + 1;
+                if (checkIndex < 3 || checkIndex == line.Length)
+                {
+                    return false;
+                }
+            }
+
+            return line[checkIndex] == '-';
         }
 
         private static string RemoveStartDashSingleLine(string input)
