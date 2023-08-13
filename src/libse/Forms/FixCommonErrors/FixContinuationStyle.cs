@@ -264,22 +264,38 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             return ContinuationUtilities.HasSuffix(input, _continuationProfile);
         }
 
+        private void EnsureNamesAreLoaded(string language)
+        {
+            if (_names != null)
+            {
+                return;
+            }
+
+            var nameList = new NameList(Configuration.DictionariesDirectory, language, Configuration.Settings.WordLists.UseOnlineNames, Configuration.Settings.WordLists.NamesUrl);
+            _names = nameList.GetAllNames();
+        }
+
         private bool StartsWithName(string input, string language)
         {
-            if (_names == null)
-            {
-                var nameList = new NameList(Configuration.DictionariesDirectory, language, Configuration.Settings.WordLists.UseOnlineNames, Configuration.Settings.WordLists.NamesUrl);
-                _names = nameList.GetAllNames();
-
-                if (_names == null)
-                {
-                    return false;
-                }
-            }
+            EnsureNamesAreLoaded(language);
 
             foreach (var name in _names)
             {
-                if (input.StartsWith(name + " ", StringComparison.Ordinal) || input.StartsWith(name + ",", StringComparison.Ordinal) || input.StartsWith(name + ":", StringComparison.Ordinal))
+                // to long name
+                if (name.Length >= input.Length)
+                {
+                    continue;
+                }
+
+                // not matching start
+                if (!input.StartsWith(name, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                // char after name
+                var charAfterName = input[name.Length];
+                if (charAfterName == ' ' || charAfterName == ':' || charAfterName == ',')
                 {
                     return true;
                 }
