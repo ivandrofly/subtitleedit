@@ -772,21 +772,8 @@ namespace Nikse.SubtitleEdit.Core.Common
             return IsNewSentence(input, false);
         }
 
-        public static bool IsEndOfSentence(string input)
-        {
-            // Return if empty string
-            if (string.IsNullOrEmpty(input))
-            {
-                return false;
-            }
-
-            return input.EndsWith('.') && !input.EndsWith("..", StringComparison.Ordinal) ||
-                   input.EndsWith('?') ||
-                   input.EndsWith('!') ||
-                   input.EndsWith(';') /* Greek question mark */ ||
-                   input.EndsWith("--", StringComparison.Ordinal);
-        }
-
+        public static bool IsEndOfSentence(string input) => input.HasSentenceEnding();
+        
         public static bool EndsWithNothing(string input, ContinuationProfile profile)
         {
             // Return if empty string
