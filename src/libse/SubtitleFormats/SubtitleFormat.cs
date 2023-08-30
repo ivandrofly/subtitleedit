@@ -715,4 +715,27 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             return newSelectedFormats.Union(unorderedFormatsList).ToList();
         }
     }
+    
+    public static class SubtitleFormatExtensions
+    {
+        public static IEnumerable<SubtitleFormat> HasExtension(this IEnumerable<SubtitleFormat> formats, string extension)
+        {
+            return formats.Where(format => string.Equals(format.Extension, extension, StringComparison.Ordinal));
+        }
+        
+        public static IEnumerable<SubtitleFormat> DoesNotHaveExtension(this IEnumerable<SubtitleFormat> formats, string extension)
+        {
+            return formats.Where(format => !string.Equals(format.Extension, extension, StringComparison.Ordinal));
+        }
+        
+        public static IEnumerable<SubtitleFormat> IsUnknown(this IEnumerable<SubtitleFormat> formats)
+        {
+            return formats.Where(format => format.Name.StartsWith("Unknown", StringComparison.Ordinal));
+        }
+        
+        public static IEnumerable<SubtitleFormat> IsKnown(this IEnumerable<SubtitleFormat> formats)
+        {
+            return formats.Where(format => !format.Name.StartsWith("Unknown", StringComparison.Ordinal));
+        }
+    }
 }

@@ -211,7 +211,7 @@ namespace Nikse.SubtitleEdit.Core.Common
             }
 
             var ext = Path.GetExtension(fileName).ToLowerInvariant();
-            foreach (var subtitleFormat in formatsToLookFor.Where(p => p.Extension == ext && !p.Name.StartsWith("Unknown", StringComparison.Ordinal)))
+            foreach (var subtitleFormat in formatsToLookFor.IsKnown().HasExtension(ext))
             {
                 if (subtitleFormat.IsMine(lines, fileName))
                 {
@@ -220,7 +220,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 }
             }
 
-            foreach (var subtitleFormat in formatsToLookFor.Where(p => p.Extension != ext || p.Name.StartsWith("Unknown", StringComparison.Ordinal)))
+            foreach (var subtitleFormat in formatsToLookFor.IsUnknown().DoesNotHaveExtension(ext))
             {
                 if (subtitleFormat.IsMine(lines, fileName))
                 {
@@ -254,7 +254,7 @@ namespace Nikse.SubtitleEdit.Core.Common
             }
 
             var ext = Path.GetExtension(fileName).ToLowerInvariant();
-            foreach (var subtitleFormat in SubtitleFormat.AllSubtitleFormats.Where(p => p.Extension == ext && !p.Name.StartsWith("Unknown", StringComparison.Ordinal)))
+            foreach (var subtitleFormat in SubtitleFormat.AllSubtitleFormats.IsKnown().HasExtension(ext))
             {
                 if (subtitleFormat.IsMine(lines, fileName))
                 {
@@ -262,7 +262,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 }
             }
 
-            foreach (var subtitleFormat in SubtitleFormat.AllSubtitleFormats.Where(p => p.Extension != ext || p.Name.StartsWith("Unknown", StringComparison.Ordinal)))
+            foreach (var subtitleFormat in SubtitleFormat.AllSubtitleFormats.IsUnknown().DoesNotHaveExtension(ext))
             {
                 if (subtitleFormat.IsMine(lines, fileName))
                 {
