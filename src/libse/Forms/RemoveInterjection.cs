@@ -647,10 +647,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
 
             if (!oldText.Contains("  "))
             {
-                while (text.Contains("  "))
-                {
-                    text = text.FixExtraSpaces();
-                }
+                text = text.FixExtraSpaces();
             }
 
             return text;

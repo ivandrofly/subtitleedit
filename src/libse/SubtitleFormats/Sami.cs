@@ -361,11 +361,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
 
                 text = text.TrimEnd();
                 text = Regex.Replace(text, @"<br {0,2}/?>", Environment.NewLine, RegexOptions.IgnoreCase);
-
-                while (text.Contains("  "))
-                {
-                    text = text.FixExtraSpaces();
-                }
+                text = text.FixExtraSpaces();
 
                 text = text.Replace("</BODY>", string.Empty).Replace("</SAMI>", string.Empty).TrimEnd();
                 text = text.Replace("</body>", string.Empty).Replace("</sami>", string.Empty).TrimEnd();

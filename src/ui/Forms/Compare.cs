@@ -555,10 +555,7 @@ namespace Nikse.SubtitleEdit.Forms
             }
 
             s = s.Replace(Environment.NewLine, " ");
-            while (s.Contains("  "))
-            {
-                s = s.Replace("  ", " ");
-            }
+            s = s.FixExtraSpaces();
 
             return s;
         }

@@ -530,10 +530,7 @@ namespace Nikse.SubtitleEdit.Core.Common
             }
 
             var s = RemoveLineBreaks(text);
-            while (s.Contains("  "))
-            {
-                s = s.FixExtraSpaces();
-            }
+            s = s.FixExtraSpaces();
 
             if (s.CountCharacters(false) < mergeLinesShorterThan)
             {
@@ -1250,10 +1247,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return false;
             }
 
-            while (text.Contains("  "))
-            {
-                text = text.FixExtraSpaces();
-            }
+            text = text.FixExtraSpaces();
 
             var s1 = "- " + startTag;
             var s2 = "-" + startTag;
