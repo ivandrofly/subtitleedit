@@ -31,8 +31,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                 return;
             }
 
-            var temp = sb.ToString();
-            temp = temp.FixExtraSpaces();
+            var temp = sb.ToString().FixExtraSpaces();
 
             temp = temp.Replace("}, {", "},{");
             temp = temp.Replace("} , {", "},{");

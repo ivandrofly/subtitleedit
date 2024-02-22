@@ -529,8 +529,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 }
             }
 
-            var s = RemoveLineBreaks(text);
-            s = s.FixExtraSpaces();
+            var s = RemoveLineBreaks(text).FixExtraSpaces();
 
             if (s.CountCharacters(false) < mergeLinesShorterThan)
             {

@@ -83,7 +83,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     string dur = node.Attributes["d"].InnerText;
                     TimeCode startTimeCode = GetTimeCode(start);
                     var endTimeCode = new TimeCode(startTimeCode.TotalMilliseconds + GetTimeCode(dur).TotalMilliseconds);
-                    var p = new Paragraph(startTimeCode, endTimeCode, node.InnerText.Replace("   ", " ").FixExtraSpaces());
+                    var p = new Paragraph(startTimeCode, endTimeCode, node.InnerText.FixExtraSpaces());
                     subtitle.Paragraphs.Add(p);
                 }
                 catch (Exception ex)
