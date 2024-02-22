@@ -3061,7 +3061,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return text;
             }
 
-            return sb.ToString().FixExtraSpaces().Replace(Environment.NewLine + " ", Environment.NewLine);
+            return sb.ToString().FixExtraSpaces();
         }
 
         public static string FixRtlViaUnicodeChars(string input)
