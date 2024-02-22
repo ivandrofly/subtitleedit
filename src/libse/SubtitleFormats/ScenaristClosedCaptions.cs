@@ -1185,7 +1185,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             }
 
             res = res.Replace(Environment.NewLine + "</font>", "</font>" + Environment.NewLine);
-            res = res.FixExtraSpaces().FixExtraSpaces().Replace(Environment.NewLine + " ", Environment.NewLine).Trim();
+            res = res.FixExtraSpaces().Trim();
             if (res.Contains("<i>") && !res.Contains("</i>"))
             {
                 res += "</i>";
