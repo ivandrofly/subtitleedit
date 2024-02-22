@@ -357,14 +357,14 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     text = text.Substring(0, st) + text.Substring(et);
                 }
                 text = text.Replace(Environment.NewLine, " ");
-                text = text.Replace("  ", " ");
+                text = text.FixExtraSpaces();
 
                 text = text.TrimEnd();
                 text = Regex.Replace(text, @"<br {0,2}/?>", Environment.NewLine, RegexOptions.IgnoreCase);
 
                 while (text.Contains("  "))
                 {
-                    text = text.Replace("  ", " ");
+                    text = text.FixExtraSpaces();
                 }
 
                 text = text.Replace("</BODY>", string.Empty).Replace("</SAMI>", string.Empty).TrimEnd();

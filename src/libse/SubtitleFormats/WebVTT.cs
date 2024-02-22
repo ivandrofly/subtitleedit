@@ -83,7 +83,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                 {
                     if (!string.IsNullOrEmpty(p.Region))
                     {
-                        positionInfo = $" region:{p.Region} {positionInfo}".Replace("  ", " ").TrimEnd();
+                        positionInfo = $" region:{p.Region} {positionInfo}".FixExtraSpaces().TrimEnd();
                     }
                 }
 

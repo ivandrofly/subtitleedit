@@ -191,7 +191,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                                 sb.AppendLine();
                             }
                         }
-                        var p = new Paragraph(timeCodeIn, timeCodeOut, sb.ToString().Replace("  ", " ").Trim());
+                        var p = new Paragraph(timeCodeIn, timeCodeOut, sb.ToString().FixExtraSpaces().Trim());
                         subtitle.Paragraphs.Add(p);
                     }
                     catch (Exception ex)

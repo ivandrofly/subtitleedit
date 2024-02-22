@@ -46,7 +46,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                 XmlNode paragraph = xml.CreateElement("cuepoint");
 
                 XmlNode text = xml.CreateElement("name");
-                text.InnerText = HtmlUtil.RemoveHtmlTags(p.Text).Replace(Environment.NewLine, " ").Replace("  ", " ");
+                text.InnerText = HtmlUtil.RemoveHtmlTags(p.Text).Replace(Environment.NewLine, " ").FixExtraSpaces();
                 paragraph.AppendChild(text);
 
                 XmlNode start = xml.CreateElement("startTime");

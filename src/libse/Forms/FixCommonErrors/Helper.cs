@@ -91,7 +91,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                 while (text.StartsWith("- .", StringComparison.Ordinal))
                 {
                     text = "- " + text.Substring(3);
-                    text = text.Replace("  ", " ");
+                    text = text.FixExtraSpaces();
                 }
             }
 
@@ -168,7 +168,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                 text = text.TrimStart('.', ' ');
                 text = "<i>- " + text;
             }
-            text = text.Replace("  ", " ");
+            text = text.FixExtraSpaces();
 
             // WOMAN 2: <i>...24 hours a day at BabyC.</i>
             var index = text.IndexOf(':');
@@ -448,7 +448,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
         private static string RemoveSpacesBeginLine(string text)
         {
             text = text.TrimStart();
-            text = text.Replace("  ", " ");
+            text = text.FixExtraSpaces();
             text = text.Replace(Environment.NewLine + " ", Environment.NewLine);
             text = text.Replace(Environment.NewLine + "<i> ", Environment.NewLine + "<i>");
             text = text.Replace(Environment.NewLine + "<b> ", Environment.NewLine + "<b>");
@@ -643,7 +643,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             }
 
             var s = HtmlUtil.RemoveHtmlTags(text, true);
-            if (s.Contains(Environment.NewLine) && s.Replace(Environment.NewLine, " ").Replace("  ", " ").CountCharacters(false) < Configuration.Settings.General.MergeLinesShorterThan)
+            if (s.Contains(Environment.NewLine) && s.Replace(Environment.NewLine, " ").FixExtraSpaces().CountCharacters(false) < Configuration.Settings.General.MergeLinesShorterThan)
             {
                 s = s.TrimEnd().TrimEnd('.', '?', '!', ':', ';');
                 s = s.TrimStart('-');

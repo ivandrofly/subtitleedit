@@ -186,7 +186,7 @@ namespace Nikse.SubtitleEdit.Core.Common
             var text = input;
             while (text.Contains("  "))
             {
-                text = text.Replace("  ", " ");
+                text = text.FixExtraSpaces();
             }
 
             if (oneLineOnly)

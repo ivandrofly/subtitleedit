@@ -889,7 +889,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 {
                     text = text.Replace(beginTag, string.Empty);
                     text = text.Replace(endTag, string.Empty);
-                    text = text.Replace("  ", " ").Trim();
+                    text = text.FixExtraSpaces().Trim();
                     text = beginTag + text + endTag;
                 }
             }
@@ -937,8 +937,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 text = text.Replace("</i> <i>", " ");
                 text = text.Replace("<i> </i>", " ");
                 text = text.Replace("<i>  </i>", " ");
-                text = text.Replace("  ", " ");
-                text = text.Replace("  ", " ");
+                text = text.FixExtraSpaces();
             }
 
             return preTags + text;

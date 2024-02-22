@@ -141,9 +141,9 @@ namespace Nikse.SubtitleEdit.Core.Common
                 p.Text = p.Text.Replace("<br />", Environment.NewLine);
                 p.Text = p.Text.Replace("&lt;", "<");
                 p.Text = p.Text.Replace("&gt;", ">");
-                p.Text = p.Text.Replace("  ", " ");
-                p.Text = p.Text.Replace("  ", " ");
-                p.Text = p.Text.Replace("  ", " ");
+                p.Text = p.Text.FixExtraSpaces();
+                p.Text = p.Text.FixExtraSpaces();
+                p.Text = p.Text.FixExtraSpaces();
                 p.Text = p.Text.Replace("|", Environment.NewLine).Replace("<p>", Environment.NewLine).Replace("</p>", Environment.NewLine).Trim();
                 p.Text = p.Text.Replace(Environment.NewLine + Environment.NewLine, Environment.NewLine).Trim();
                 p.Text = p.Text.Replace(Environment.NewLine + Environment.NewLine, Environment.NewLine).Trim();

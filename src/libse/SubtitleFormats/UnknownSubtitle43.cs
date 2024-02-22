@@ -113,7 +113,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
 
                     string start = node.Attributes["start"].InnerText;
                     string end = node.Attributes["end"].InnerText;
-                    var p = new Paragraph(GetTimeCode(start), GetTimeCode(end), pText.ToString().Replace("   ", " ").Replace("  ", " "));
+                    var p = new Paragraph(GetTimeCode(start), GetTimeCode(end), pText.ToString().Replace("   ", " ").FixExtraSpaces());
                     subtitle.Paragraphs.Add(p);
                 }
                 catch (Exception ex)

@@ -532,7 +532,7 @@ namespace Nikse.SubtitleEdit.Core.Common
             var s = RemoveLineBreaks(text);
             while (s.Contains("  "))
             {
-                s = s.Replace("  ", " ");
+                s = s.FixExtraSpaces();
             }
 
             if (s.CountCharacters(false) < mergeLinesShorterThan)
@@ -1252,7 +1252,7 @@ namespace Nikse.SubtitleEdit.Core.Common
 
             while (text.Contains("  "))
             {
-                text = text.Replace("  ", " ");
+                text = text.FixExtraSpaces();
             }
 
             var s1 = "- " + startTag;
@@ -3067,7 +3067,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                 return text;
             }
 
-            return sb.ToString().Replace("  ", " ").Replace(Environment.NewLine + " ", Environment.NewLine);
+            return sb.ToString().FixExtraSpaces().Replace(Environment.NewLine + " ", Environment.NewLine);
         }
 
         public static string FixRtlViaUnicodeChars(string input)

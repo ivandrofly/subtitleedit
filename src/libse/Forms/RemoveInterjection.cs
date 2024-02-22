@@ -168,7 +168,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
                             }
                             else if (index > 3 && (temp.Substring(index - 2) == ".  —" || temp.Substring(index - 2) == "!  —" || temp.Substring(index - 2) == "?  —"))
                             {
-                                temp = temp.Remove(index - 2, 1).Replace("  ", " ");
+                                temp = temp.Remove(index - 2, 1).FixExtraSpaces();
                             }
                             else if (index > 3 && (temp.Substring(index - 2).StartsWith("\n¿? ")))
                             {
@@ -283,7 +283,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
                                         }
                                         else if (index > 2 && subTemp.StartsWith("-  —", StringComparison.Ordinal))
                                         {
-                                            temp = temp.Remove(subIndex + 2, 2).Replace("  ", " ");
+                                            temp = temp.Remove(subIndex + 2, 2).FixExtraSpaces();
                                             removeAfter = false;
                                         }
                                     }
@@ -649,7 +649,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
             {
                 while (text.Contains("  "))
                 {
-                    text = text.Replace("  ", " ");
+                    text = text.FixExtraSpaces();
                 }
             }
 

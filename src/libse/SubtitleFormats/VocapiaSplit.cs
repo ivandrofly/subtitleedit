@@ -108,7 +108,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     string end = node.Attributes["etime"].InnerText;
                     string text = node.InnerText;
                     text = text.Replace("<s/>", Environment.NewLine);
-                    text = text.Replace("  ", " ");
+                    text = text.FixExtraSpaces();
                     var p = new Paragraph(text, ParseTimeCode(start), ParseTimeCode(end));
                     var spkIdAttr = node.Attributes["spkid"];
                     if (spkIdAttr != null)

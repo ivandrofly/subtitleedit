@@ -137,7 +137,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     }
                 }
                 return sb.ToString()
-                         .Replace("  ", " ")
+                         .FixExtraSpaces()
                          .Replace(Environment.NewLine + " ", Environment.NewLine)
                          .Replace(" " + Environment.NewLine, Environment.NewLine).Trim();
             }

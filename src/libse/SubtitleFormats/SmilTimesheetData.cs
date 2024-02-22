@@ -136,7 +136,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                         text = text.Replace("\t", " ");
                         while (text.Contains("  "))
                         {
-                            text = text.Replace("  ", " ");
+                            text = text.FixExtraSpaces();
                         }
 
                         while (text.Contains(Environment.NewLine + " "))

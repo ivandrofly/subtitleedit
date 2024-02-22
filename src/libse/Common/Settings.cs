@@ -6420,7 +6420,7 @@ $HorzAlign          =   Center
             subNode = node.SelectSingleNode("NoLineBreakAfterEnglish");
             if (subNode != null)
             {
-                settings.Tools.NoLineBreakAfterEnglish = subNode.InnerText.Replace("  ", " ");
+                settings.Tools.NoLineBreakAfterEnglish = subNode.InnerText.FixExtraSpaces();
             }
 
             subNode = node.SelectSingleNode("ExportTextFormatText");

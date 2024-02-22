@@ -471,7 +471,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
         private static string AutoBreakLineMax4Lines(string text, int maxLength)
         {
             string s = text.Replace(Environment.NewLine, " ");
-            s = s.Replace("  ", " ");
+            s = s.FixExtraSpaces();
             var sb = new StringBuilder();
             int i = GetLastIndexOfSpace(s, maxLength);
             if (i > 0)
@@ -1185,7 +1185,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             }
 
             res = res.Replace(Environment.NewLine + "</font>", "</font>" + Environment.NewLine);
-            res = res.Replace("  ", " ").Replace("  ", " ").Replace(Environment.NewLine + " ", Environment.NewLine).Trim();
+            res = res.FixExtraSpaces().FixExtraSpaces().Replace(Environment.NewLine + " ", Environment.NewLine).Trim();
             if (res.Contains("<i>") && !res.Contains("</i>"))
             {
                 res += "</i>";

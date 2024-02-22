@@ -1975,8 +1975,8 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             }
 
             text = text
-                .Replace("  ", " ")
-                .Replace("  ", " ")
+                .FixExtraSpaces()
+                .FixExtraSpaces()
                 .Replace(" " + Environment.NewLine, Environment.NewLine)
                 .Replace(" " + Environment.NewLine, Environment.NewLine)
                 .Replace(Environment.NewLine + " ", Environment.NewLine)

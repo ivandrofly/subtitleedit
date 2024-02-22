@@ -1010,7 +1010,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
             }
             text = st.Pre + sb.ToString().Trim() + st.Post;
 
-            text = text.Replace("  ", " ").Trim();
+            text = text.FixExtraSpaces().Trim();
             text = text.Replace("<i></i>", string.Empty);
             text = text.Replace("<i> </i>", " ");
             text = text.Replace("<b></b>", string.Empty);
@@ -1018,7 +1018,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
             text = text.Replace("<u></u>", string.Empty);
             text = text.Replace("<u> </u>", " ");
             text = RemoveEmptyFontTag(text);
-            text = text.Replace("  ", " ").Trim();
+            text = text.FixExtraSpaces().Trim();
             text = RemoveColon(text);
             text = RemoveLineIfAllUppercase(text);
             text = RemoveHearingImpairedTagsInsideLine(text);
@@ -1242,7 +1242,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
                                 text = text.Insert(indexOfStartFont, " ");
                             }
 
-                            text = text.Replace("  ", " ");
+                            text = text.FixExtraSpaces();
                         }
                     }
                 }

@@ -251,7 +251,7 @@ namespace Nikse.SubtitleEdit.Core.Translate
                 s = s.Replace(" " + Environment.NewLine, Environment.NewLine).Trim();
                 if (formattings.Length > index)
                     s = formattings[index].ReAddFormatting(s);
-                resultList.Add(s.Replace("  ", " "));
+                resultList.Add(s.FixExtraSpaces());
             }
             return resultList;
         }

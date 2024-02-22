@@ -30,7 +30,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     }
 
                     var s = HtmlUtil.RemoveHtmlTags(p.Text, true);
-                    if (!s.Contains(Environment.NewLine) || s.Replace(Environment.NewLine, " ").Replace("  ", " ").CountCharacters(false) >= Configuration.Settings.General.MergeLinesShorterThan)
+                    if (!s.Contains(Environment.NewLine) || s.Replace(Environment.NewLine, " ").FixExtraSpaces().CountCharacters(false) >= Configuration.Settings.General.MergeLinesShorterThan)
                     {
                         continue;
                     }

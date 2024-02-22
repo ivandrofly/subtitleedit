@@ -114,7 +114,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     }
 
                     var subText = text.ToString()
-                        .Replace("  ", " ")
+                        .FixExtraSpaces()
                         .Replace(Environment.NewLine + "  ", Environment.NewLine)
                         .Trim();
                     if (!string.IsNullOrEmpty(subText) && dur > 0)

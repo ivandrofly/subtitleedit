@@ -188,7 +188,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                         p.Text = Regex.Replace(p.Text, @"<c(\.[\w\d]+)?>(.*?)</c>", "$2");
                     }
 
-                    p.Text = p.Text.Replace("  ", " ").Replace(" " + Environment.NewLine, Environment.NewLine);
+                    p.Text = p.Text.FixExtraSpaces();
                 } 
                 else
                 {

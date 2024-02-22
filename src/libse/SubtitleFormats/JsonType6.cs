@@ -22,7 +22,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                 Paragraph p = subtitle.Paragraphs[i];
 
                 //split words
-                string text = p.Text.Replace(Environment.NewLine, " ").Replace("  ", " ");
+                string text = p.Text.Replace(Environment.NewLine, " ").FixExtraSpaces();
                 var words = text.Split(CharSpace, StringSplitOptions.RemoveEmptyEntries);
                 var times = GenerateTimes(words, text, p.StartTime, p.EndTime);
                 for (int j = 0; j < words.Length; j++)
