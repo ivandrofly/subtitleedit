@@ -312,59 +312,56 @@ namespace Nikse.SubtitleEdit.Core.SpellCheck
             return s;
         }
 
-        public string ReplaceHtmlTagsWithBlanks(string s)
+        // e.g {\an4}
+        private readonly string _sixCharWhiteSpace = "      ";
+
+        private string ReplaceTagWithWhiteSpace(string s, in char tagStartChar)
         {
-            int start = s.IndexOf('<');
-            while (start >= 0)
+            // normally all ass tag are placed at the beginning text
+            if (tagStartChar == '{')
             {
-                int end = s.IndexOf('>', start + 1);
-                if (end < start)
+                if (s.StartsWith("{\\", StringComparison.Ordinal))
                 {
-                    break;
+                    return _sixCharWhiteSpace + s.Substring(_sixCharWhiteSpace.Length);
                 }
 
-                int l = end - start + 1;
-                s = s.Remove(start, l).Insert(start, string.Empty.PadLeft(l));
-                end++;
-                if (end >= s.Length)
-                {
-                    break;
-                }
-
-                start = s.IndexOf('<', end);
+                return s; // has '{' in beginning but it's not an ass 
             }
-            return s;
+
+            var len = s.Length;
+            var chars = new char[len];
+            // init entire array with white space
+            for (var i = 0; i < len; i++)
+            {
+                chars[i] = ' ';
+            }
+
+            for (var i = 0; i < len; i++)
+            {
+                if (s[i] == tagStartChar)
+                {
+                    var closePairIdx = s.IndexOf(CharUtils.GetClosingPair(tagStartChar), i + 1);
+                    if (closePairIdx > i)
+                    {
+                        i = closePairIdx; // jump tag
+                    }
+                    else
+                    {
+                        chars[i] = s[i]; // include '<', no closing '>' present
+                    }
+                }
+                else
+                {
+                    chars[i] = s[i];
+                }
+            }
+
+            return new string(chars, 0, len);
         }
 
-        public string ReplaceAssTagsWithBlanks(string s)
-        {
-            int start = s.IndexOf("{\\", StringComparison.Ordinal);
-            int end = s.IndexOf('}');
-            if (start < 0 || end < 0 || end < start)
-            {
-                return s;
-            }
-
-            while (start >= 0)
-            {
-                end = s.IndexOf('}', start + 1);
-                if (end < start)
-                {
-                    break;
-                }
-
-                int l = end - start + 1;
-                s = s.Remove(start, l).Insert(start, string.Empty.PadLeft(l));
-                end++;
-                if (end >= s.Length)
-                {
-                    break;
-                }
-
-                start = s.IndexOf("{\\", end, StringComparison.Ordinal);
-            }
-            return s;
-        }
+        public string ReplaceHtmlTagsWithBlanks(string s) => ReplaceTagWithWhiteSpace(s, '<');
+        
+        public string ReplaceAssTagsWithBlanks(string s) => ReplaceTagWithWhiteSpace(s, '{');
 
         public bool IsWordInUserPhrases(int index, List<SpellCheckWord> words)
         {

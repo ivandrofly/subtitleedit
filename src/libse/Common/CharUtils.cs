@@ -18,5 +18,15 @@
         /// Checks if character is between A-Z or a-z
         /// </summary>
         public static bool IsEnglishAlphabet(char ch) => ch >= 'A' && ch <= 'z' && (ch <= 'Z' || ch >= 'a');
+
+        public static char GetClosingPair(char ch)
+        {
+            switch (ch)
+            {
+                case '<': return '>';
+                case '{': return '}';
+                default: return '\0';
+            }
+        }
     }
 }
