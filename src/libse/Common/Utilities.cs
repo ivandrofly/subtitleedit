@@ -2,6 +2,7 @@
 using Nikse.SubtitleEdit.Core.ContainerFormats.Matroska;
 using Nikse.SubtitleEdit.Core.SubtitleFormats;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -1132,18 +1133,10 @@ namespace Nikse.SubtitleEdit.Core.Common
                     }
                 }
             }
-
-
-
+            
             return userWordListXmlFileName;
         }
-
-        public static readonly string UppercaseLetters = Configuration.Settings.General.UppercaseLetters.ToUpperInvariant() + "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ";
-        public static readonly string LowercaseLetters = Configuration.Settings.General.UppercaseLetters.ToLowerInvariant() + "αβγδεζηθικλμνξοπρσςτυφχψωήάόέ";
-        public static readonly string LowercaseLettersWithNumbers = LowercaseLetters + "0123456789";
-        public static readonly string AllLetters = UppercaseLetters + LowercaseLetters;
-        public static readonly string AllLettersAndNumbers = UppercaseLetters + LowercaseLettersWithNumbers;
-
+        
         public static Color GetColorFromUserName(string userName)
         {
             if (string.IsNullOrEmpty(userName))
@@ -3003,7 +2996,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                     }
 
                     var isLineContinuation = s.EndsWith("...", StringComparison.Ordinal) ||
-                                              (AllLetters + "…,-$%").Contains(s.Substring(s.Length - 1)) ||
+                                              (LookupSet.Letters + "…,-$%").Contains(s.Substring(s.Length - 1)) ||
                                               CalcCjk.IsCjk(s[s.Length - 1]);
 
                     if (s.EndsWith('♪') || nextText.StartsWith('♪'))

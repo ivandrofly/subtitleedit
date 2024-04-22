@@ -118,7 +118,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                         }
                     }
                 }
-                else if (next != null && !string.IsNullOrEmpty(p.Text) && Utilities.AllLettersAndNumbers.Contains(p.Text[p.Text.Length - 1]))
+                else if (next != null && !string.IsNullOrEmpty(p.Text) && LookupSet.LettersAndNumbers.Contains(p.Text[p.Text.Length - 1]))
                 {
                     if (p.Text != p.Text.ToUpperInvariant())
                     {

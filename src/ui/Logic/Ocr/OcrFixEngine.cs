@@ -1010,22 +1010,22 @@ namespace Nikse.SubtitleEdit.Logic.Ocr
             var hasDotDot = text.Contains("..", StringComparison.Ordinal) || text.Contains(". .", StringComparison.Ordinal);
             if (hasDotDot)
             {
-                if (text.Length > 5 && text.StartsWith("..", StringComparison.Ordinal) && Utilities.AllLettersAndNumbers.Contains(text[2]))
+                if (text.Length > 5 && text.StartsWith("..", StringComparison.Ordinal) && LookupSet.LettersAndNumbers.Contains(text[2]))
                 {
                     text = "..." + text.Remove(0, 2);
                 }
 
-                if (text.Length > 7 && text.StartsWith("<i>..", StringComparison.Ordinal) && Utilities.AllLettersAndNumbers.Contains(text[5]))
+                if (text.Length > 7 && text.StartsWith("<i>..", StringComparison.Ordinal) && LookupSet.LettersAndNumbers.Contains(text[5]))
                 {
                     text = "<i>..." + text.Remove(0, 5);
                 }
 
-                if (text.Length > 5 && text.StartsWith(".. ", StringComparison.Ordinal) && Utilities.AllLettersAndNumbers.Contains(text[3]))
+                if (text.Length > 5 && text.StartsWith(".. ", StringComparison.Ordinal) && LookupSet.LettersAndNumbers.Contains(text[3]))
                 {
                     text = "..." + text.Remove(0, 3);
                 }
 
-                if (text.Length > 7 && text.StartsWith("<i>.. ", StringComparison.Ordinal) && Utilities.AllLettersAndNumbers.Contains(text[6]))
+                if (text.Length > 7 && text.StartsWith("<i>.. ", StringComparison.Ordinal) && LookupSet.LettersAndNumbers.Contains(text[6]))
                 {
                     text = "<i>..." + text.Remove(0, 6);
                 }

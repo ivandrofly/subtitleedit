@@ -2297,7 +2297,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
                                 }
                                 else if (i == boldIndex)
                                 {
-                                    if (Utilities.AllLetters.Contains(f))
+                                    if (LookupSet.Letters.Contains(f))
                                     {
                                         sb.AppendLine("'Bold' incorrect: " + rawLine);
                                         sb.AppendLine();
@@ -2305,7 +2305,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
                                 }
                                 else if (i == italicIndex)
                                 {
-                                    if (Utilities.AllLetters.Contains(f))
+                                    if (LookupSet.Letters.Contains(f))
                                     {
                                         sb.AppendLine("'Italic' incorrect: " + rawLine);
                                         sb.AppendLine();
@@ -2313,7 +2313,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
                                 }
                                 else if (i == underlineIndex)
                                 {
-                                    if (Utilities.AllLetters.Contains(f))
+                                    if (LookupSet.Letters.Contains(f))
                                     {
                                         sb.AppendLine("'Underline' incorrect: " + rawLine);
                                         sb.AppendLine();
@@ -2321,7 +2321,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
                                 }
                                 else if (i == strikeOutIndex)
                                 {
-                                    if (Utilities.AllLetters.Contains(f))
+                                    if (LookupSet.Letters.Contains(f))
                                     {
                                         sb.AppendLine("'StrikeOut' incorrect: " + rawLine);
                                         sb.AppendLine();

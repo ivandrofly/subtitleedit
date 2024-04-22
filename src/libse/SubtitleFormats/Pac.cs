@@ -2354,7 +2354,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
 
         private static bool OnlyAnsi(string line)
         {
-            var latin = Utilities.AllLettersAndNumbers + " .!?/%:;=()#$'&\"";
+            var latin = LookupSet.LettersAndNumbers + " .!?/%:;=()#$'&\"";
             foreach (var ch in line)
             {
                 if (!latin.Contains(ch))
