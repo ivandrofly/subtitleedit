@@ -2996,7 +2996,7 @@ namespace Nikse.SubtitleEdit.Core.Common
                     }
 
                     var isLineContinuation = s.EndsWith("...", StringComparison.Ordinal) ||
-                                              (LookupSet.Letters + "…,-$%").Contains(s.Substring(s.Length - 1)) ||
+                                              (CharLookupSet.Letters + "…,-$%").Contains(s.Substring(s.Length - 1)) ||
                                               CalcCjk.IsCjk(s[s.Length - 1]);
 
                     if (s.EndsWith('♪') || nextText.StartsWith('♪'))

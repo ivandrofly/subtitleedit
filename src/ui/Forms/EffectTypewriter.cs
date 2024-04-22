@@ -143,7 +143,7 @@ namespace Nikse.SubtitleEdit.Forms
                                     j++;
                                 }
 
-                                while (j < tag.Length && (@"#" + LookupSet.LowercaseLettersWithNumbers).Contains(tag[j]))
+                                while (j < tag.Length && (@"#" + CharLookupSet.LowercaseLettersWithNumbers).Contains(tag[j]))
                                 {
                                     tempColor += tag[j];
                                     j++;

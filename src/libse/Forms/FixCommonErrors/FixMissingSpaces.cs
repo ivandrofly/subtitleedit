@@ -280,8 +280,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     {
                         if (newText.Length > index + 4 && index >= 1)
                         {
-                            if ((LookupSet.LettersAndNumbers + "$").Contains(newText[index + 3]) &&
-                                LookupSet.LettersAndNumbers.Contains(newText[index - 1]))
+                            if ((CharLookupSet.LettersAndNumbers + "$").Contains(newText[index + 3]) &&
+                                CharLookupSet.LettersAndNumbers.Contains(newText[index - 1]))
                             {
                                 newText = newText.Insert(index + 3, " ");
                             }
@@ -306,8 +306,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     {
                         if (newText.Length > index + 6 && index > 1)
                         {
-                            if (LookupSet.LettersAndNumbers.Contains(newText[index + 3]) &&
-                                LookupSet.LettersAndNumbers.Contains(newText[index - 1]))
+                            if (CharLookupSet.LettersAndNumbers.Contains(newText[index + 3]) &&
+                                CharLookupSet.LettersAndNumbers.Contains(newText[index - 1]))
                             {
                                 newText = newText.Insert(index, " ");
                             }
@@ -332,8 +332,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     {
                         if (newText.Length > index + 6 && index > 1)
                         {
-                            if (LookupSet.LettersAndNumbers.Contains(newText[index + 4]) &&
-                                LookupSet.LettersAndNumbers.Contains(newText[index - 1]))
+                            if (CharLookupSet.LettersAndNumbers.Contains(newText[index + 4]) &&
+                                CharLookupSet.LettersAndNumbers.Contains(newText[index - 1]))
                             {
                                 newText = newText.Insert(index + 4, " ");
                             }
