@@ -276,11 +276,12 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                 if (index > 0 && p.Text.Length > 5)
                 {
                     var newText = p.Text;
+                    var customSet = CharLookupSet.LettersAndNumbers + "$";
                     while (index != -1)
                     {
                         if (newText.Length > index + 4 && index >= 1)
                         {
-                            if ((CharLookupSet.LettersAndNumbers + "$").Contains(newText[index + 3]) &&
+                            if (customSet.Contains(newText[index + 3]) &&
                                 CharLookupSet.LettersAndNumbers.Contains(newText[index - 1]))
                             {
                                 newText = newText.Insert(index + 3, " ");
