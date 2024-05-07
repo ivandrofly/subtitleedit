@@ -43,7 +43,7 @@ namespace Nikse.SubtitleEdit.Core.Translate.Service
         {
             if (_httpClient == null)
             {
-                _httpClient = DownloaderFactory.MakeHttpClient();
+                _httpClient = DownloaderFactory.Create();
                 _httpClient.BaseAddress = new Uri("https://api.cognitive.microsofttranslator.com/");
                 _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
@@ -54,7 +54,7 @@ namespace Nikse.SubtitleEdit.Core.Translate.Service
 
         private static string GetAccessToken(string apiKey, string tokenEndpoint)
         {
-            using (var httpClient = DownloaderFactory.MakeHttpClient())
+            using (var httpClient = DownloaderFactory.Create())
             {
                 httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 httpClient.DefaultRequestHeaders.TryAddWithoutValidation(SecurityHeaderName, apiKey);
@@ -70,7 +70,7 @@ namespace Nikse.SubtitleEdit.Core.Translate.Service
                 return _translationPairs;
             }
 
-            using (var httpClient = DownloaderFactory.MakeHttpClient())
+            using (var httpClient = DownloaderFactory.Create())
             {
                 httpClient.DefaultRequestHeaders.Add("user-agent", "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36");
                 httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Content-Type", "application/json; charset=UTF-8");

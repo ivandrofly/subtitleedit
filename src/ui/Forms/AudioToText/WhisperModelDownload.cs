@@ -103,7 +103,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                     }
                 }
                 
-                var httpClient = DownloaderFactory.MakeHttpClient();
+                var httpClient = DownloaderFactory.Create();
                 foreach (var url in LastDownloadedModel.Urls)
                 {
                     currentDownloadUrl = url;

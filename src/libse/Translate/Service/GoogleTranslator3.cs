@@ -25,7 +25,7 @@ namespace Nikse.SubtitleEdit.Core.Translate.Service
         {
             _apiKey = apiKey;
             _projectNumberOrId = projectNumberOrId;
-            _httpClient = DownloaderFactory.MakeHttpClient();
+            _httpClient = DownloaderFactory.Create();
             _httpClient.BaseAddress = new Uri("https://translation.googleapis.com/v3/");
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
