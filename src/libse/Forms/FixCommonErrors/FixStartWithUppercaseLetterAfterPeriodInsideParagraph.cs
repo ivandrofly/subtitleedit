@@ -73,7 +73,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                         {
                             var textBefore = text.Substring(0, start + 1);
                             var subText = new StrippableText(text.Substring(start + 2));
-                            text = text.Substring(0, start + 2) + subText.CombineWithPrePost(ToUpperFirstLetter(textBefore, subText.StrippedText, callbacks));
+                            text = text.Substring(0, start + 2) + subText.CombineWithPrePost(
+                                StartWithUppercaseIfPossible(textBefore, subText.StrippedText, callbacks));
                         }
 
                         start += 3;
@@ -103,7 +104,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             callbacks.UpdateFixStatus(noOfFixes, Language.StartWithUppercaseLetterAfterPeriodInsideParagraph);
         }
 
-        private static string ToUpperFirstLetter(string textBefore, string text, IFixCallbacks callbacks)
+        private static string StartWithUppercaseIfPossible(string textBefore, string text, IFixCallbacks callbacks)
         {
             if (string.IsNullOrEmpty(text) || !char.IsLetter(text[0]) || char.IsUpper(text[0]))
             {
@@ -137,8 +138,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                 return Helper.GetTurkishUppercaseLetter(text[0], callbacks.Encoding) + text.Substring(1);
             }
 
-            text = char.ToUpper(text[0]) + text.Substring(1);
-            return text;
+            return text.CapitalizeFirstLetter();
         }
 
     }
