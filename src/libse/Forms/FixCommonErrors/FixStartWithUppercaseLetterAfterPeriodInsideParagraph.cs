@@ -1,4 +1,5 @@
-﻿using Nikse.SubtitleEdit.Core.Common;
+﻿using System;
+using Nikse.SubtitleEdit.Core.Common;
 using Nikse.SubtitleEdit.Core.Interfaces;
 using System.Text.RegularExpressions;
 
@@ -104,6 +105,18 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             callbacks.UpdateFixStatus(noOfFixes, Language.StartWithUppercaseLetterAfterPeriodInsideParagraph);
         }
 
+        private static string FirstWord(string text)
+        {
+            var index = 0;
+            var len = text.Length;
+            while (index < len && !char.IsWhiteSpace(text[index]))
+            {
+                index++;
+            }
+
+            return text.Substring(0, index);
+        }
+
         private static string StartWithUppercaseIfPossible(string preText, string text, IFixCallbacks callbacks)
         {
             if (string.IsNullOrEmpty(text) || !char.IsLetter(text[0]) || char.IsUpper(text[0]))
@@ -113,13 +126,14 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
 
             if (preText != null && preText.EndsWith("...", System.StringComparison.Ordinal))
             {
-                if (callbacks.Language == "en" && text.StartsWith("i "))
+                var capFirstWord = FirstWord(text).CapitalizeFirstLetter();
+                if (callbacks.Language == "en" && capFirstWord.StartsWith("I", StringComparison.Ordinal))
                 {
+                    return text.CapitalizeFirstLetter();
                 }
-                else
-                {
-                    return text; // too hard to say if uppercase after "..."
-                }
+
+                // if after uppercasing the first word, if it's in namelist the keep it converted
+                return callbacks.IsName(capFirstWord) ? text.CapitalizeFirstLetter() : text;
             }
 
             if (preText != null && preText.EndsWith(" - ", System.StringComparison.Ordinal) && !preText.EndsWith(". - ", System.StringComparison.Ordinal))
