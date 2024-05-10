@@ -104,14 +104,14 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             callbacks.UpdateFixStatus(noOfFixes, Language.StartWithUppercaseLetterAfterPeriodInsideParagraph);
         }
 
-        private static string StartWithUppercaseIfPossible(string textBefore, string text, IFixCallbacks callbacks)
+        private static string StartWithUppercaseIfPossible(string preText, string text, IFixCallbacks callbacks)
         {
             if (string.IsNullOrEmpty(text) || !char.IsLetter(text[0]) || char.IsUpper(text[0]))
             {
                 return text;
             }
 
-            if (textBefore != null && textBefore.EndsWith("...", System.StringComparison.Ordinal))
+            if (preText != null && preText.EndsWith("...", System.StringComparison.Ordinal))
             {
                 if (callbacks.Language == "en" && text.StartsWith("i "))
                 {
@@ -122,7 +122,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                 }
             }
 
-            if (textBefore != null && textBefore.EndsWith(" - ", System.StringComparison.Ordinal) && !textBefore.EndsWith(". - ", System.StringComparison.Ordinal))
+            if (preText != null && preText.EndsWith(" - ", System.StringComparison.Ordinal) && !preText.EndsWith(". - ", System.StringComparison.Ordinal))
             {
                 return text;
             }
