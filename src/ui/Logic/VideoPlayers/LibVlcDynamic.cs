@@ -805,28 +805,21 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
                     }
                 }
 
-                path = Path.Combine(@"C:\Program Files (x86)\VideoLAN\VLC", fileName);
-                if (File.Exists(path))
+                var candidateLocations = new[]
                 {
-                    return path;
-                }
+                    @"C:\Program Files (x86)\VideoLAN\VLC",
+                    @"C:\Program Files\VideoLAN\VLC",
+                    @"C:\Program Files (x86)\VLC",
+                    @"C:\Program Files\VLC"
+                };
 
-                path = Path.Combine(@"C:\Program Files\VideoLAN\VLC", fileName);
-                if (File.Exists(path))
+                foreach (var location in candidateLocations)
                 {
-                    return path;
-                }
-
-                path = Path.Combine(@"C:\Program Files (x86)\VLC", fileName);
-                if (File.Exists(path))
-                {
-                    return path;
-                }
-
-                path = Path.Combine(@"C:\Program Files\VLC", fileName);
-                if (File.Exists(path))
-                {
-                    return path;
+                    path = Path.Combine(location, fileName);
+                    if (File.Exists(path))
+                    {
+                        return path;
+                    }
                 }
             }
 
