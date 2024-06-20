@@ -481,30 +481,26 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
 
             _libvlc_media_player_set_pause(_mediaPlayer, 1);
 
-            WaitUntilReady();
-            if (!IsHandleCreated())
+            if (!WaitUntilReady())
             {
                 return;
             }
             _libvlc_media_player_set_pause(_mediaPlayer, 1);
         }
 
-        private void WaitUntilReady()
+        private bool WaitUntilReady()
         {
-            int state = VlcState;
-            int i = 0;
+            var state = VlcState;
+            var i = 0;
             while (state != 4 && i < 50)
             {
                 System.Threading.Thread.Sleep(10);
                 Application.DoEvents();
-                if (!IsHandleCreated())
-                {
-                    return;
-                }
-
                 state = VlcState;
                 i++;
             }
+
+            return state == 4;
         }
 
         public override void Stop()
@@ -1079,7 +1075,7 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
                     if (_mediaPlayer != IntPtr.Zero)
                     {
                         _libvlc_media_player_stop(_mediaPlayer);
-                        WaitUntilReady();
+                        _ = WaitUntilReady();
                         _libvlc_media_player_release(_mediaPlayer); // CRASHES in visual sync / point sync?
                         _mediaPlayer = IntPtr.Zero;
                     }
