@@ -457,7 +457,7 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         {
             get
             {
-                if (_mediaPlayer == IntPtr.Zero)
+                if (!IsHandleCreated())
                 {
                     return 0;
                 }
@@ -474,7 +474,7 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
 
         public override void Pause()
         {
-            if (_mediaPlayer == IntPtr.Zero)
+            if (!IsHandleCreated())
             {
                 return;
             }
@@ -482,7 +482,7 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
             _libvlc_media_player_set_pause(_mediaPlayer, 1);
 
             WaitUntilReady();
-            if (_mediaPlayer == IntPtr.Zero)
+            if (!IsHandleCreated())
             {
                 return;
             }
@@ -497,7 +497,7 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
             {
                 System.Threading.Thread.Sleep(10);
                 Application.DoEvents();
-                if (_mediaPlayer == IntPtr.Zero)
+                if (!IsHandleCreated())
                 {
                     return;
                 }
@@ -517,7 +517,7 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         {
             get
             {
-                if (_mediaPlayer == IntPtr.Zero)
+                if (!IsHandleCreated())
                 {
                     return true;
                 }
@@ -532,7 +532,7 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         {
             get
             {
-                if (_mediaPlayer == IntPtr.Zero)
+                if (!IsHandleCreated())
                 {
                     return false;
                 }
@@ -542,6 +542,8 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
                 return state == playing;
             }
         }
+
+        private bool IsHandleCreated() => _mediaPlayer != IntPtr.Zero;
 
         private struct TrackDescription
         {
@@ -1042,7 +1044,7 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         {
             lock (DisposeLock)
             {
-                if (_mediaPlayer == IntPtr.Zero)
+                if (!IsHandleCreated())
                 {
                     return;
                 }
