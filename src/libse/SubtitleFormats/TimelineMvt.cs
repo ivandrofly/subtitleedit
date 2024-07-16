@@ -38,7 +38,6 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             {
                 return;
             }
-            string title = Encoding.UTF8.GetString(bytes, 9, index - 9);
 
             // language1
             index += 2;

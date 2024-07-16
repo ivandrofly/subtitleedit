@@ -22,11 +22,6 @@ namespace Nikse.SubtitleEdit.Core.AudioToText
         public void CreateModelFolder()
         {
             var whisperFolder = Path.Combine(Configuration.DataDirectory, "Whisper");
-            if (!Directory.Exists(whisperFolder))
-            {
-                Directory.CreateDirectory(whisperFolder);
-            }
-
             whisperFolder = Path.Combine(whisperFolder, "Cpp");
             if (!Directory.Exists(whisperFolder))
             {

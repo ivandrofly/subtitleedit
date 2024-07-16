@@ -24,11 +24,6 @@ namespace Nikse.SubtitleEdit.Core.AudioToText
         public void CreateModelFolder()
         {
             var cacheFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache");
-            if (!Directory.Exists(cacheFolder))
-            {
-                Directory.CreateDirectory(cacheFolder);
-            }
-
             cacheFolder = Path.Combine(cacheFolder, "hub");
             if (!Directory.Exists(cacheFolder))
             {

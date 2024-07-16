@@ -700,11 +700,6 @@ namespace Nikse.SubtitleEdit.Forms.Tts
         private bool GenerateParagraphAudioPiperTts(Subtitle subtitle, bool showProgressBar, string overrideFileName)
         {
             var ttsPath = Path.Combine(Configuration.DataDirectory, "TextToSpeech");
-            if (!Directory.Exists(ttsPath))
-            {
-                Directory.CreateDirectory(ttsPath);
-            }
-
             var piperPath = Path.Combine(ttsPath, "Piper");
             if (!Directory.Exists(piperPath))
             {
@@ -1146,11 +1141,6 @@ namespace Nikse.SubtitleEdit.Forms.Tts
         private List<AzureVoiceModel> GetAzureVoices(bool useCache)
         {
             var ttsPath = Path.Combine(Configuration.DataDirectory, "TextToSpeech");
-            if (!Directory.Exists(ttsPath))
-            {
-                Directory.CreateDirectory(ttsPath);
-            }
-
             var azurePath = Path.Combine(ttsPath, "Azure");
             if (!Directory.Exists(azurePath))
             {
@@ -1784,11 +1774,6 @@ namespace Nikse.SubtitleEdit.Forms.Tts
         private List<PiperModel> GetPiperVoices(bool useCache)
         {
             var ttsPath = Path.Combine(Configuration.DataDirectory, "TextToSpeech");
-            if (!Directory.Exists(ttsPath))
-            {
-                Directory.CreateDirectory(ttsPath);
-            }
-
             var elevenLabsPath = Path.Combine(ttsPath, "Piper");
             if (!Directory.Exists(elevenLabsPath))
             {
@@ -1883,11 +1868,6 @@ namespace Nikse.SubtitleEdit.Forms.Tts
         private List<ElevenLabModel> GetElevenLabVoices(bool useCache)
         {
             var ttsPath = Path.Combine(Configuration.DataDirectory, "TextToSpeech");
-            if (!Directory.Exists(ttsPath))
-            {
-                Directory.CreateDirectory(ttsPath);
-            }
-
             var elevenLabsPath = Path.Combine(ttsPath, "ElevenLabs");
             if (!Directory.Exists(elevenLabsPath))
             {
@@ -1973,11 +1953,6 @@ namespace Nikse.SubtitleEdit.Forms.Tts
         private List<string> GetAllTalkVoices(bool useCache)
         {
             var ttsPath = Path.Combine(Configuration.DataDirectory, "TextToSpeech");
-            if (!Directory.Exists(ttsPath))
-            {
-                Directory.CreateDirectory(ttsPath);
-            }
-
             var allTalkPath = Path.Combine(ttsPath, "AllTalk");
             if (!Directory.Exists(allTalkPath))
             {

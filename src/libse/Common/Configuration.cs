@@ -204,7 +204,6 @@ namespace Nikse.SubtitleEdit.Core.Common
 
             try
             {
-                Directory.CreateDirectory(appDataRoamingPath);
                 Directory.CreateDirectory(Path.Combine(appDataRoamingPath, "Dictionaries"));
                 return appDataRoamingPath + Path.DirectorySeparatorChar;
             }

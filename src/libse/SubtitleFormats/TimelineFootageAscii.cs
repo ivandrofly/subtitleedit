@@ -25,7 +25,6 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
     /// </summary>
     public class TimeLineFootageAscii : SubtitleFormat
     {
-
         private static readonly Regex RegexTimeCode = new Regex(@"^\s*\d+,\d\d$", RegexOptions.Compiled);
 
         private enum ExpectingLine
