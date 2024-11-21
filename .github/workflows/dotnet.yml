@@ -15,15 +15,15 @@ jobs:
     steps:
       # Checkout the repository
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       # Setup MSBuild
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1
+        uses: microsoft/setup-msbuild@v2
       
       # Setup NuGet
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v1
+        uses: NuGet/setup-nuget@v2
       
       # Restore NuGet packages
       - name: Restore NuGet packages
@@ -35,4 +35,4 @@ jobs:
 
       # Run unit-tests
       - name: Run tests
-        run: vstest.console "src\Test\bin\%CONFIGURATION%\Test.dll"
+        run: vstest.console "src\Test\bin\Release\Test.dll"
