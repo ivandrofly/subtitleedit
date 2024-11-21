@@ -35,4 +35,4 @@ jobs:
 
       # Run unit-tests
       - name: Run tests
-        run: vstest.console.exe src\Test\bin\Release\Test.dll
+        run: vstest.console "src\Test\bin\%CONFIGURATION%\Test.dll"
