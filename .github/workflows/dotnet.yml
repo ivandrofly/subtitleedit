@@ -34,14 +34,8 @@ jobs:
         run: msbuild "SubtitleEdit.sln" /p:Configuration=Release
 
       # Run unit-tests
-      - name: Download tests binary zip
-        run: powershell Invoke-WebRequest -Uri "https://localworker.blob.core.windows.net/win-x64/tests.zip" -OutFile "./tests.zip"
-      - name: Unzip tests binary
-        run: powershell Expand-Archive -Path tests.zip -DestinationPath ./
-      - name: Run tests
-        uses: microsoft-approved-actions/vstest@master
-        with:
-          testAssembly: src\Test\bin\Release\Test.dll
-          runInParallel: true
-#        run: dotnet test --no-build --verbosity normal "SubtitleEdit.sln"
-#        run: vstest.console "src\Test\bin\Release\Test.dll"
+      - name: Setup VSTest Path
+        uses: darenm/Setup-VSTest@v1.2
+
+      - name: VSTest
+        run: vstest.console.exe /Platform:x64 "src\Test\bin\Release\Test.dll"
