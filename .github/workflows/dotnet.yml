@@ -38,4 +38,4 @@ jobs:
         uses: darenm/Setup-VSTest@v1.2
 
       - name: VSTest
-        run: vstest.console.exe /Platform:x64 "src\Test\bin\Release\Test.dll"
+        run: vstest.console.exe /Platform:x64 "src\Test\bin\Release\net48\win\Test.dll"
