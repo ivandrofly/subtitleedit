@@ -35,5 +35,8 @@ jobs:
 
       # Run unit-tests
       - name: Run tests
-        run: dotnet test --no-build --verbosity normal "SubtitleEdit.sln"
+        uses: microsoft-approved-actions/vstest@master
+        with:
+          testAssembly: "\src\Test\bin\Debug\Test.dll"
+#        run: dotnet test --no-build --verbosity normal "SubtitleEdit.sln"
 #        run: vstest.console "src\Test\bin\Release\Test.dll"
