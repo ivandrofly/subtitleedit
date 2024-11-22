@@ -37,6 +37,7 @@ jobs:
       - name: Run tests
         uses: microsoft-approved-actions/vstest@master
         with:
-          testAssembly: "\src\Test\bin\Debug\Test.dll"
+          testAssembly: src\Test\bin\Debug\Test.dll
+          runInParallel: true
 #        run: dotnet test --no-build --verbosity normal "SubtitleEdit.sln"
 #        run: vstest.console "src\Test\bin\Release\Test.dll"
