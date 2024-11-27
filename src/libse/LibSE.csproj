@@ -18,6 +18,8 @@
 		<PackageReleaseNotes>SE 4.0.8</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
 		<PackageReadmeFile>Readme.md</PackageReadmeFile>
+		<AssemblyVersion>4.0.8.209</AssemblyVersion>
+		<FileVersion>4.0.8.209</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
