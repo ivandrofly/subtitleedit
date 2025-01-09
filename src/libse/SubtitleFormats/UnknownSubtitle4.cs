@@ -48,6 +48,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                                         text));
                 sb.AppendLine();
             }
+
             return sb.ToString().Trim();
         }
 
@@ -97,10 +98,11 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     expecting = ExpectingLine.TimeCodes;
                 }
             }
+
             subtitle.Renumber();
         }
 
-        public string DecodeFormatting(string text)
+        private string DecodeFormatting(string text)
         {
             var s = text.Replace("|", Environment.NewLine);
             s = s.Replace("[br]", Environment.NewLine);
@@ -119,7 +121,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             return s;
         }
 
-        public string EncodeFormatting(string text)
+        private string EncodeFormatting(string text)
         {
             var s = text.Replace(Environment.NewLine, "|");
             s = s.Replace("<i>", "{\\i1}");
@@ -130,6 +132,5 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             s = s.Replace("</u>", "{\\u0}");
             return s;
         }
-
     }
 }
