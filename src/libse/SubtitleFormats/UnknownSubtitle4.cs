@@ -69,27 +69,24 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             {
                 if (line.IndexOf(':') == 2 && RegexTimeCodes.IsMatch(line))
                 {
-                    string[] parts = line.Split(splitChars, StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length == 8)
+                    var parts = line.Split(splitChars, StringSplitOptions.RemoveEmptyEntries);
+                    try
                     {
-                        try
-                        {
-                            int startHours = int.Parse(parts[0]);
-                            int startMinutes = int.Parse(parts[1]);
-                            int startSeconds = int.Parse(parts[2]);
-                            int startMilliseconds = int.Parse(parts[3]);
-                            int endHours = int.Parse(parts[4]);
-                            int endMinutes = int.Parse(parts[5]);
-                            int endSeconds = int.Parse(parts[6]);
-                            int endMilliseconds = int.Parse(parts[7]);
-                            paragraph.StartTime = new TimeCode(startHours, startMinutes, startSeconds, startMilliseconds);
-                            paragraph.EndTime = new TimeCode(endHours, endMinutes, endSeconds, endMilliseconds);
-                            expecting = ExpectingLine.Text;
-                        }
-                        catch
-                        {
-                            expecting = ExpectingLine.TimeCodes;
-                        }
+                        int startHours = int.Parse(parts[0]);
+                        int startMinutes = int.Parse(parts[1]);
+                        int startSeconds = int.Parse(parts[2]);
+                        int startMilliseconds = int.Parse(parts[3]);
+                        int endHours = int.Parse(parts[4]);
+                        int endMinutes = int.Parse(parts[5]);
+                        int endSeconds = int.Parse(parts[6]);
+                        int endMilliseconds = int.Parse(parts[7]);
+                        paragraph.StartTime = new TimeCode(startHours, startMinutes, startSeconds, startMilliseconds);
+                        paragraph.EndTime = new TimeCode(endHours, endMinutes, endSeconds, endMilliseconds);
+                        expecting = ExpectingLine.Text;
+                    }
+                    catch
+                    {
+                        expecting = ExpectingLine.TimeCodes;
                     }
                 }
                 else
