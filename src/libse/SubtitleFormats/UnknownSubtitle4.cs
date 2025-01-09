@@ -119,7 +119,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             s = s.Replace("{\\i1}", "<i>");
             s = s.Replace("{\\i0}", "</i>");
             s = s.Replace("{\\i}", "</i>");
-            s = s.Replace("{\\b1}", "<b>'");
+            s = s.Replace("{\\b1}", "<b>");
             s = s.Replace("{\\b0}", "</b>");
             s = s.Replace("{\\b}", "</b>");
             s = s.Replace("{\\u1}", "<u>");
