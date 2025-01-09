@@ -89,18 +89,12 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                         expecting = ExpectingLine.TimeCodes;
                     }
                 }
-                else
+                else if (expecting == ExpectingLine.Text && line.Length > 0)
                 {
-                    if (expecting == ExpectingLine.Text)
-                    {
-                        if (line.Length > 0)
-                        {
-                            paragraph.Text = DecodeFormatting(line);
-                            subtitle.Paragraphs.Add(paragraph);
-                            paragraph = new Paragraph();
-                            expecting = ExpectingLine.TimeCodes;
-                        }
-                    }
+                    paragraph.Text = DecodeFormatting(line);
+                    subtitle.Paragraphs.Add(paragraph);
+                    paragraph = new Paragraph();
+                    expecting = ExpectingLine.TimeCodes;
                 }
             }
             subtitle.Renumber();
