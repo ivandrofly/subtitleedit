@@ -304,7 +304,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
 
                                             if ((lineIndex == 0 || lineIndex == 1) && !string.IsNullOrEmpty(content) && content[0].ToString() != content[0].ToString().ToUpperInvariant())
                                             {
-                                                content = content[0].ToString().ToUpperInvariant() + content.Remove(0, 1);
+                                                content = content.CapitalizeFirstLetter();
                                             }
 
                                             newText += Environment.NewLine;
