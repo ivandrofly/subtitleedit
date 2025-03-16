@@ -2,7 +2,6 @@
 using System;
 using System.Drawing;
 using System.Linq;
-using System.Net.Sockets;
 using System.Text;
 
 namespace Nikse.SubtitleEdit.Core.Common
