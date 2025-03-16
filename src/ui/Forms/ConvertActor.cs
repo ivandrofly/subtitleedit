@@ -109,7 +109,7 @@ namespace Nikse.SubtitleEdit.Forms
             groupBoxLinesFound.Text = string.Format(LanguageSettings.Current.ConvertActor.NumberOfConversionsX, NumberOfActorConversions);
         }
 
-        public Subtitle ConvertActors(Subtitle subtitle, out int numberOfConversions, bool clearFixes)
+        private void ConvertActors(Subtitle subtitle, out int numberOfConversions, bool clearFixes)
         {
             if (!_loading)
             {
@@ -201,7 +201,6 @@ namespace Nikse.SubtitleEdit.Forms
             }
 
             convertedSubtitle.Renumber();
-            return convertedSubtitle;
         }
 
 
