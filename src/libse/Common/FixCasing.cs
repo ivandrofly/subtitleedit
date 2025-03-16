@@ -162,12 +162,12 @@ namespace Nikse.SubtitleEdit.Core.Common
         private string FixCasingAfterTitles(string input)
         {
             var text = input;
-            var titles = new[] { "Mrs.", "Miss.", "Mr.", "Ms.", "Dr." };
+            
             var notChangeWords = new[] { "does", "has", "will", "is", "and", "for", "but", "or", "of" };
             for (int i = 0; i < text.Length - 4; i++)
             {
                 var start = text.Substring(i);
-                foreach (var title in titles)
+                foreach (var title in StringUtils.Titles)
                 {
                     if (start.StartsWith(title, StringComparison.OrdinalIgnoreCase))
                     {

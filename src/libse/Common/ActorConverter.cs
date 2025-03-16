@@ -1,6 +1,8 @@
 ﻿using Nikse.SubtitleEdit.Core.SubtitleFormats;
 using System;
 using System.Drawing;
+using System.Linq;
+using System.Net.Sockets;
 using System.Text;
 
 namespace Nikse.SubtitleEdit.Core.Common
@@ -120,6 +122,39 @@ namespace Nikse.SubtitleEdit.Core.Common
             return sb.ToString().Trim();
         }
 
+        private readonly char[] _sentenceTerminators = { '.', '!', '?' };
+
+        private bool IsAfterClosedSentence(string input)
+        {
+            for (int r = input.Length - 1; r >= 0; r--)
+            {
+                if (_sentenceTerminators.Contains(input[r]))
+                {
+                    if (input[r] == '.')
+                    {
+                        int l = r;
+                        while (l > 0 && input[l - 1] != ' ')
+                        {
+                            l--;
+                        }
+
+                        // Mr. Ms. and so on...
+                        if (l > 0 && input[l] == ' ' && !StringUtils.Titles.Contains(input.Substring(l, r - l + 1)))
+                        {
+                            return true;
+                        }
+                    }
+                    else
+                    {
+                        // any other terminator other than '.' is considered as a closed sentence without further analysis.
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
         public ActorConverterResult FixActors(Paragraph paragraph, char start, char end, int? changeCasing, Color? color)
         {
             var p = new Paragraph(paragraph, false);
@@ -144,6 +179,12 @@ namespace Nikse.SubtitleEdit.Core.Common
                         break;
                     }
 
+                    // normally narrator/actor always start from the beginning of a sentence.
+                    if (IsAfterClosedSentence(s.Substring(0, endIdx + 1)))
+                    {
+                        continue;
+                    }
+                    
                     var actor = s.Substring(startIdx + 1, endIdx - startIdx - 1).Trim(' ', '-', '"');
                     if (changeCasing.HasValue)
                     {
