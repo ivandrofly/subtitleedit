@@ -156,6 +156,17 @@ namespace Nikse.SubtitleEdit.Core.Common
             return false;
         }
 
+        private bool IsSingleLineSentence(string line, int lineCount, (char open, char close) tag)
+        {
+            if (lineCount != 1)
+            {
+                return false;
+            }
+
+            string noTagLine = HtmlUtil.RemoveHtmlTags(line, true);
+            return noTagLine.StartsWith(tag.open) && noTagLine.EndsWith(tag.close);
+        }
+
         public ActorConverterResult FixActors(Paragraph paragraph, char start, char end, int? changeCasing, Color? color)
         {
             var p = new Paragraph(paragraph, false);
@@ -179,11 +190,17 @@ namespace Nikse.SubtitleEdit.Core.Common
                         break;
                     }
 
+                    var zeroToCloseSymbol = s.Substring(0, endIdx + 1);
                     // normally narrator/actor always start from the beginning of a sentence.
-                    if (IsAfterClosedSentence(s.Substring(0, endIdx + 1)))
+                    if (IsAfterClosedSentence(zeroToCloseSymbol))
                     {
                         continue;
                     }
+
+                    // if (IsSingleLineSentence(zeroToCloseSymbol, lines.Count, (start, end)))
+                    // {
+                    //     continue;
+                    // }
                     
                     var actor = s.Substring(startIdx + 1, endIdx - startIdx - 1).Trim(' ', '-', '"');
                     if (changeCasing.HasValue)
