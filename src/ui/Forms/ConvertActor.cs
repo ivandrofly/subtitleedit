@@ -186,10 +186,6 @@ namespace Nikse.SubtitleEdit.Forms
                     listViewItems.Add(MakeListViewItem(p, p.Number, p.Text, oldText, false));
                     numberOfConversions++;
                 }
-                else
-                {
-                    continue;
-                }
             }
 
             listViewFixes.Items.AddRange(listViewItems.ToArray());
