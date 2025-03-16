@@ -150,6 +150,12 @@ namespace Nikse.SubtitleEdit.Forms
                 if (fromSquare && Contains(p.Text, '[', ']'))
                 {
                     var result = converter.FixActors(p, '[', ']', changeCasing, color);
+
+                    if (result.Paragraph.Text.Equals(p.Text))
+                    {
+                        continue;
+                    }
+                    
                     p.Text = result.Paragraph.Text;
                     p.Actor = result.Paragraph.Actor;
                     listViewItems.Add(MakeListViewItem(p, p.Number, p.Text, oldText, false));
@@ -163,6 +169,11 @@ namespace Nikse.SubtitleEdit.Forms
                 else if (fromParentheses && Contains(p.Text, '(', ')'))
                 {
                     var result = converter.FixActors(p, '(', ')', changeCasing, color);
+                    
+                    if (result.Paragraph.Text.Equals(p.Text))
+                    {
+                        continue;
+                    }
                     p.Text = result.Paragraph.Text;
                     p.Actor = result.Paragraph.Actor;
                     listViewItems.Add(MakeListViewItem(p, p.Number, p.Text, oldText, false));

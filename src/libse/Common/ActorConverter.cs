@@ -167,7 +167,6 @@ namespace Nikse.SubtitleEdit.Core.Common
             }
 
             var lineIdx = 0;
-            p.Text = string.Empty;
             foreach (var line in lines)
             {
                 var s = line;
