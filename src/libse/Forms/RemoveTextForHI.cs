@@ -112,14 +112,14 @@ namespace Nikse.SubtitleEdit.Core.Forms
             var newText = string.Empty;
             var lines = text.Trim().SplitToLines();
             var noOfNames = 0;
-            var count = 0;
+            var lineIndex = 0;
             var removedInFirstLine = false;
             var removedInSecondLine = false;
             var removedFirstLineNotStart = false;
             foreach (var line in lines)
             {
                 var indexOfColon = line.IndexOf(':');
-                var isLastColon = count == lines.Count - 1 && !HtmlUtil.RemoveHtmlTags(line).TrimEnd(':').Contains(':');
+                var isLastColon = lineIndex == lines.Count - 1 && !HtmlUtil.RemoveHtmlTags(line).TrimEnd(':').Contains(':');
                 if (indexOfColon <= 0 || IsInsideBrackets(line, indexOfColon) || (isLastColon && Utilities.CountTagInText(HtmlUtil.RemoveHtmlTags(line), ' ') > 1))
                 {
                     newText = (newText + Environment.NewLine + line).Trim();
@@ -140,12 +140,12 @@ namespace Nikse.SubtitleEdit.Core.Forms
                     if (Settings.RemoveTextBeforeColonOnlyUppercase && noTagPre != noTagPre.ToUpperInvariant())
                     {
                         var remove = true;
-                        newText = RemovePartialBeforeColon(line, indexOfColon, newText, count, ref removedInFirstLine, ref removedInSecondLine, ref remove);
+                        newText = RemovePartialBeforeColon(line, indexOfColon, newText, lineIndex, ref removedInFirstLine, ref removedInSecondLine, ref remove);
                         if (remove)
                         {
                             var s = line;
                             var l1Trim = HtmlUtil.RemoveHtmlTags(lines[0]).TrimEnd('"');
-                            if (count == 1 && lines.Count == 2 && !l1Trim.EndsWith('.') &&
+                            if (lineIndex == 1 && lines.Count == 2 && !l1Trim.EndsWith('.') &&
                                                                    !l1Trim.EndsWith('!') &&
                                                                    !l1Trim.EndsWith('?'))
                             {
@@ -176,7 +176,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
                         var newTextNoHtml = HtmlUtil.RemoveHtmlTags(newText);
                         if (Utilities.CountTagInText(line, ':') == 1)
                         {
-                            if (count == 1 && newText.Length > 1 && removedInFirstLine &&
+                            if (lineIndex == 1 && newText.Length > 1 && removedInFirstLine &&
                                 !".?!♪♫".Contains(newTextNoHtml[newTextNoHtml.Length - 1]) && newText.LineEndsWithHtmlTag(true) &&
                                 line != line.ToUpperInvariant())
                             {
@@ -206,7 +206,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
                                     newText += line;
                                 }
                             }
-                            else if (count == 1 && newTextNoHtml.Length > 1 && indexOfColon > 15 && line.Substring(0, indexOfColon).Contains(' ') &&
+                            else if (lineIndex == 1 && newTextNoHtml.Length > 1 && indexOfColon > 15 && line.Substring(0, indexOfColon).Contains(' ') &&
                                      !".?!♪♫".Contains(newTextNoHtml[newTextNoHtml.Length - 1]) && newText.LineEndsWithHtmlTag(true) &&
                                      line != line.ToUpperInvariant())
                             {
@@ -259,7 +259,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
                                 }
 
                                 var l1Trimmed = HtmlUtil.RemoveHtmlTags(lines[0]).TrimEnd('"');
-                                if (count == 1 && lines.Count == 2 && !l1Trimmed.EndsWith('.') &&
+                                if (lineIndex == 1 && lines.Count == 2 && !l1Trimmed.EndsWith('.') &&
                                     !l1Trimmed.EndsWith('!') &&
                                     !l1Trimmed.EndsWith('?') &&
                                     !l1Trimmed.EndsWith('♪') &&
@@ -272,8 +272,8 @@ namespace Nikse.SubtitleEdit.Core.Forms
 
                                 if (remove)
                                 {
-                                    newText = RemovePartialBeforeColon(line, indexOfColon, newText, count, ref removedInFirstLine, ref removedInSecondLine, ref remove);
-                                    if (count == 0 && removedInFirstLine && indexOfColon > 10)
+                                    newText = RemovePartialBeforeColon(line, indexOfColon, newText, lineIndex, ref removedInFirstLine, ref removedInSecondLine, ref remove);
+                                    if (lineIndex == 0 && removedInFirstLine && indexOfColon > 10)
                                     {
                                         removedFirstLineNotStart = true;
                                     }
@@ -302,11 +302,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
                                                 content = content.Remove(0, "</b>".Length);
                                             }
 
-                                            if (count == 0 && !string.IsNullOrEmpty(content) && content[0].ToString() != content[0].ToString().ToUpperInvariant())
-                                            {
-                                                content = content[0].ToString().ToUpperInvariant() + content.Remove(0, 1);
-                                            }
-                                            else if (count == 1 && !string.IsNullOrEmpty(content) && content[0].ToString() != content[0].ToString().ToUpperInvariant())
+                                            if ((lineIndex == 0 || lineIndex == 1) && !string.IsNullOrEmpty(content) && content[0].ToString() != content[0].ToString().ToUpperInvariant())
                                             {
                                                 content = content[0].ToString().ToUpperInvariant() + content.Remove(0, 1);
                                             }
@@ -333,11 +329,11 @@ namespace Nikse.SubtitleEdit.Core.Forms
                                                 newText += content;
                                             }
 
-                                            if (count == 0)
+                                            if (lineIndex == 0)
                                             {
                                                 removedInFirstLine = true;
                                             }
-                                            else if (count == 1)
+                                            else if (lineIndex == 1)
                                             {
                                                 removedInSecondLine = true;
                                             }
@@ -383,7 +379,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
 
                                     var l1Trim = HtmlUtil.RemoveHtmlTags(lines[0]).TrimEnd('"');
                                     if (!skipDoToNumbers &&
-                                        count == 1 &&
+                                        lineIndex == 1 &&
                                         lines.Count == 2 &&
                                         !l1Trim.EndsWith('.') &&
                                         !l1Trim.EndsWith('!') &&
@@ -481,11 +477,11 @@ namespace Nikse.SubtitleEdit.Core.Forms
                                         }
                                     }
 
-                                    if (count == 0)
+                                    if (lineIndex == 0)
                                     {
                                         removedInFirstLine = true;
                                     }
-                                    else if (count == 1)
+                                    else if (lineIndex == 1)
                                     {
                                         removedInSecondLine = true;
                                     }
@@ -495,7 +491,7 @@ namespace Nikse.SubtitleEdit.Core.Forms
                         }
                     }
                 }
-                count++;
+                lineIndex++;
             }
             newText = newText.Trim();
             if ((noOfNames > 0 || removedInFirstLine) && Utilities.GetNumberOfLines(newText) == 2)
