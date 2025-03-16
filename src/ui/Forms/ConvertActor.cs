@@ -124,8 +124,7 @@ namespace Nikse.SubtitleEdit.Forms
 
             numberOfConversions = 0;
             var convertedSubtitle = new Subtitle();
-            Paragraph p = null;
-            var lineNumbers = new List<int>();
+            Paragraph p;
             var listViewItems = new List<ListViewItem>();
 
             var converter = new ActorConverter(_subtitleFormat);
