@@ -126,20 +126,22 @@ namespace Nikse.SubtitleEdit.Core.Common
 
         private bool IsAfterClosedSentence(string input)
         {
-            for (int r = input.Length - 1; r >= 0; r--)
+            string noTagInput = HtmlUtil.RemoveHtmlTags(input, true);
+
+            for (int r = noTagInput.Length - 1; r >= 0; r--)
             {
-                if (_sentenceTerminators.Contains(input[r]))
+                if (_sentenceTerminators.Contains(noTagInput[r]))
                 {
-                    if (input[r] == '.')
+                    if (noTagInput[r] == '.')
                     {
                         int l = r;
-                        while (l > 0 && input[l - 1] != ' ')
+                        while (l > 0 && char.IsLetterOrDigit(noTagInput[l - 1]))
                         {
                             l--;
                         }
 
                         // Mr. Ms. and so on...
-                        if (l > 0 && input[l] == ' ' && !StringUtils.Titles.Contains(input.Substring(l, r - l + 1)))
+                        if (!StringUtils.Titles.Contains(noTagInput.Substring(l, r - l + 1)))
                         {
                             return true;
                         }
