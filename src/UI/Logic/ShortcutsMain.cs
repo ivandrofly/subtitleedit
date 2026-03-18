@@ -641,6 +641,7 @@ public static class ShortcutsMain
             new(nameof(vm.FindNextCommand), [nameof(Avalonia.Input.Key.F3)], ShortcutCategory.General),
             new(nameof(vm.FindPreviousCommand), ["Shift", nameof(Avalonia.Input.Key.F3)], ShortcutCategory.General),
             new(nameof(vm.ShowReplaceCommand), [cmd, "R"], ShortcutCategory.General),
+            new(nameof(vm.ShowReplaceCommand), [cmd, "H"], ShortcutCategory.General),
             new(nameof(vm.ShowMultipleReplaceCommand), [cmd, "Shift", "R"], ShortcutCategory.General),
             new(nameof(vm.OpenDataFolderCommand), [cmd, "Alt", "Shift", "D"], ShortcutCategory.General),
             new(nameof(vm.CommandFileNewCommand), [cmd, "N"], ShortcutCategory.General),
