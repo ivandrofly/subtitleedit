@@ -193,7 +193,9 @@ public partial class MainViewModel :
 
     [ObservableProperty] private bool _isWaveformToolbarVisible;
     [ObservableProperty] private bool _isSubtitleGridFlyoutHeaderVisible;
+    [ObservableProperty] private bool _isSubtitleGridDataMenuVisible;
     [ObservableProperty] private bool _isMergeWithNextOrPreviousVisible;
+    [ObservableProperty] private bool _isInsertLineNoSelectionVisible;
     [ObservableProperty] private bool _showColumnOriginalText;
     [ObservableProperty] private bool _showColumnEndTime;
     [ObservableProperty] private bool _showColumnGap;
@@ -202,6 +204,7 @@ public partial class MainViewModel :
     [ObservableProperty] private bool _showColumnStyle;
     [ObservableProperty] private bool _showColumnCps;
     [ObservableProperty] private bool _showColumnWpm;
+    [ObservableProperty] private bool _showColumnPixelWidth;
     [ObservableProperty] private bool _showColumnLayer;
     [ObservableProperty] private bool _showUpDownStartTime;
     [ObservableProperty] private bool _showUpDownEndTime;
@@ -245,6 +248,7 @@ public partial class MainViewModel :
     [ObservableProperty] private bool _isSubtitleSecondaryVisible;
 
     public DataGrid SubtitleGrid { get; set; }
+    public Border? SubtitleGridDropHost { get; set; }
     public Window? Window { get; set; }
     public Grid ContentGrid { get; set; }
     public MainView? MainView { get; set; }
@@ -477,6 +481,7 @@ public partial class MainViewModel :
         ShowColumnStyle = Se.Settings.General.ShowColumnStyle;
         ShowColumnCps = Se.Settings.General.ShowColumnCps;
         ShowColumnWpm = Se.Settings.General.ShowColumnWpm;
+        ShowColumnPixelWidth = Se.Settings.General.ShowColumnPixelWidth;
         ShowColumnLayer = Se.Settings.General.ShowColumnLayer;
         ShowUpDownStartTime = Se.Settings.Appearance.ShowUpDownStartTime;
         ShowUpDownEndTime = Se.Settings.Appearance.ShowUpDownEndTime;
@@ -2054,6 +2059,37 @@ public partial class MainViewModel :
         }
 
         var format = new CapMakerPlus();
+        using var ms = new MemoryStream();
+        format.Save(_subtitleFileName, ms, GetUpdateSubtitle(), false);
+
+        var fileName = await _fileHelper.PickSaveSubtitleFile(
+            Window!,
+            format,
+            GetNewFileName(),
+            $"Save {format.Name} file as");
+
+        if (!string.IsNullOrEmpty(fileName))
+        {
+            File.WriteAllBytes(fileName, ms.ToArray());
+            ShowStatus(string.Format(Se.Language.Main.FileExportedInFormatXToY, format.Name, fileName));
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportCheetahCaption()
+    {
+        if (Window == null)
+        {
+            return;
+        }
+
+        if (IsEmpty)
+        {
+            ShowSubtitleNotLoadedMessage();
+            return;
+        }
+
+        var format = new CheetahCaption();
         using var ms = new MemoryStream();
         format.Save(_subtitleFileName, ms, GetUpdateSubtitle(), false);
 
@@ -6404,6 +6440,14 @@ public partial class MainViewModel :
     }
 
     [RelayCommand]
+    private void ToggleShowColumnPixelWidth()
+    {
+        Se.Settings.General.ShowColumnPixelWidth = !Se.Settings.General.ShowColumnPixelWidth;
+        ShowColumnPixelWidth = Se.Settings.General.ShowColumnPixelWidth;
+        AutoFitColumns();
+    }
+
+    [RelayCommand]
     private void ToggleShowColumnLayer()
     {
         ShowColumnLayer = !ShowColumnLayer;
@@ -6455,6 +6499,27 @@ public partial class MainViewModel :
     {
         _undoRedoManager.StopChangeDetection();
         InsertAfterSelectedItem();
+        _undoRedoManager.StartChangeDetection();
+    }
+
+    [RelayCommand]
+    private void InsertLineAtEnd()
+    {
+        _undoRedoManager.StopChangeDetection();
+        if (Subtitles.Count == 0)
+        {
+            _insertService.InsertBefore(SelectedSubtitleFormat, _subtitle, Subtitles, 0, string.Empty);
+            Renumber();
+            SelectAndScrollToRow(0);
+        }
+        else
+        {
+            var lastIndex = Subtitles.Count - 1;
+            _insertService.InsertAfter(SelectedSubtitleFormat, _subtitle, Subtitles, lastIndex, string.Empty);
+            Renumber();
+            SelectAndScrollToRow(lastIndex + 1);
+        }
+        _updateAudioVisualizer = true;
         _undoRedoManager.StartChangeDetection();
     }
 
@@ -13045,11 +13110,21 @@ public partial class MainViewModel :
 
         if (IsSubtitleGridFlyoutHeaderVisible)
         {
+            IsSubtitleGridDataMenuVisible = false;
             IsMergeWithNextOrPreviousVisible = false;
+            IsInsertLineNoSelectionVisible = false;
+        }
+        else if (Subtitles.Count == 0)
+        {
+            IsSubtitleGridDataMenuVisible = false;
+            IsMergeWithNextOrPreviousVisible = false;
+            IsInsertLineNoSelectionVisible = true;
         }
         else
         {
+            IsSubtitleGridDataMenuVisible = true;
             IsMergeWithNextOrPreviousVisible = SubtitleGrid.SelectedItems.Count == 1;
+            IsInsertLineNoSelectionVisible = false;
 
             if (IsFormatAssa || IsFormatSsa)
             {

@@ -31,16 +31,18 @@ public static partial class InitListViewAndEditBox
             vm.SubtitleGrid.SelectionChanged -= vm.SubtitleGrid_SelectionChanged;
             vm.SubtitleGrid.Tapped -= vm.OnSubtitleGridSingleTapped;
             vm.SubtitleGrid.DoubleTapped -= vm.OnSubtitleGridDoubleTapped;
-            vm.SubtitleGrid.PointerPressed -= vm.SubtitleGrid_PointerPressed;
-            vm.SubtitleGrid.PointerReleased -= vm.SubtitleGrid_PointerReleased;
 
-            // Remove handlers added with AddHandler
-            vm.SubtitleGrid.RemoveHandler(InputElement.PointerPressedEvent, vm.SubtitleGrid_PointerPressed);
-            vm.SubtitleGrid.RemoveHandler(InputElement.PointerReleasedEvent, vm.SubtitleGrid_PointerReleased);
+            if (vm.SubtitleGridDropHost != null)
+            {
+                vm.SubtitleGridDropHost.PointerPressed -= vm.SubtitleGrid_PointerPressed;
+                vm.SubtitleGridDropHost.RemoveHandler(InputElement.PointerPressedEvent, vm.SubtitleGrid_PointerPressed);
+                vm.SubtitleGridDropHost.RemoveHandler(InputElement.PointerReleasedEvent, vm.SubtitleGrid_PointerReleased);
+                vm.SubtitleGridDropHost.ContextFlyout = null;
+                vm.SubtitleGridDropHost = null;
+            }
 
             // Clear the grid to help with garbage collection
             vm.SubtitleGrid.ItemsSource = null;
-            vm.SubtitleGrid.ContextFlyout = null;
         }
 
         // Unhook events from old text editors if they exist
@@ -84,7 +86,7 @@ public static partial class InitListViewAndEditBox
             SelectionMode = DataGridSelectionMode.Extended,
             DataContext = vm.Subtitles,
             CanUserResizeColumns = true,
-            GridLinesVisibility = UiUtil.GetGridLinesVisibility(),
+            GridLinesVisibility = DataGridGridLinesVisibility.None, // Grid lines are rendered via cell themes
             VerticalGridLinesBrush = UiUtil.GetBorderBrush(),
             HorizontalGridLinesBrush = UiUtil.GetBorderBrush(),
             FontSize = Se.Settings.Appearance.SubtitleGridFontSize,
@@ -100,6 +102,7 @@ public static partial class InitListViewAndEditBox
             Background = Brushes.Transparent,
             Child = vm.SubtitleGrid
         };
+        vm.SubtitleGridDropHost = dropHost;
         DragDrop.SetAllowDrop(dropHost, true);
         dropHost.AddHandler(DragDrop.DragOverEvent, vm.SubtitleGridOnDragOver, RoutingStrategies.Bubble);
         dropHost.AddHandler(DragDrop.DropEvent, vm.SubtitleGridOnDrop, RoutingStrategies.Bubble);
@@ -373,7 +376,7 @@ public static partial class InitListViewAndEditBox
             Mode = BindingMode.OneWay,
             Source = vm,
         });
-
+        
         var wpmColumn = new DataGridTemplateColumn
         {
             Header = Se.Language.General.Wpm,
@@ -400,6 +403,29 @@ public static partial class InitListViewAndEditBox
         };
         vm.SubtitleGrid.Columns.Add(wpmColumn);
         wpmColumn.Bind(DataGridColumn.IsVisibleProperty, new Binding(nameof(vm.ShowColumnWpm))
+        {
+            Mode = BindingMode.OneWay,
+            Source = vm,
+        });
+        
+        var pixelWidthColumn = new DataGridTemplateColumn
+        {
+            Header = Se.Language.General.PixelWidth,
+            Width = new DataGridLength(100),
+            CellTheme = UiUtil.DataGridNoBorderCellTheme,
+            CellTemplate = new FuncDataTemplate<SubtitleLineViewModel>((value, nameScope) =>
+            {
+                var textBlock = new TextBlock
+                {
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextWrapping = TextWrapping.Wrap,
+                    [!TextBlock.TextProperty] = new Binding(nameof(SubtitleLineViewModel.PixelWidth)) {  Mode = BindingMode.OneWay },
+                };
+                return textBlock;
+            })
+        };
+        vm.SubtitleGrid.Columns.Add(pixelWidthColumn);
+        pixelWidthColumn.Bind(DataGridColumn.IsVisibleProperty, new Binding(nameof(vm.ShowColumnPixelWidth))
         {
             Mode = BindingMode.OneWay,
             Source = vm,
@@ -444,7 +470,7 @@ public static partial class InitListViewAndEditBox
         var flyout = new MenuFlyout();
 
         flyout.Opening += vm.SubtitleContextOpening;
-        vm.SubtitleGrid.PointerPressed += vm.SubtitleGrid_PointerPressed;
+        dropHost.PointerPressed += vm.SubtitleGrid_PointerPressed;
 
         var assaStylesMenuItem = new MenuItem
         {
@@ -582,6 +608,21 @@ public static partial class InitListViewAndEditBox
         };
         showWpmMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Mode = BindingMode.TwoWay });
         flyout.Items.Add(showWpmMenuItem);
+        
+        var showPixelWidthMenuItem = new MenuItem
+        {
+            Header = Se.Language.General.ShowPixelWidthColumn,
+            Command = vm.ToggleShowColumnPixelWidthCommand,
+            DataContext = vm,
+            Icon = new Icon
+            {
+                Value = IconNames.CheckBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                [!Visual.IsVisibleProperty] = new Binding(nameof(vm.ShowColumnPixelWidth)),
+            }
+        };
+        showPixelWidthMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Mode = BindingMode.TwoWay });
+        flyout.Items.Add(showPixelWidthMenuItem);
 
         var showLayerMenuItem = new MenuItem
         {
@@ -600,19 +641,24 @@ public static partial class InitListViewAndEditBox
 
 
         var deleteMenuItem = new MenuItem { Header = Se.Language.General.Delete, DataContext = vm };
-        deleteMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        deleteMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         deleteMenuItem.Command = vm.DeleteSelectedLinesCommand;
         flyout.Items.Add(deleteMenuItem);
 
         var insertBeforeMenuItem = new MenuItem { Header = Se.Language.General.InsertBefore, DataContext = vm };
-        insertBeforeMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        insertBeforeMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         insertBeforeMenuItem.Command = vm.InsertLineBeforeCommand;
         flyout.Items.Add(insertBeforeMenuItem);
 
         var insertAfterMenuItem = new MenuItem { Header = Se.Language.General.InsertAfter, DataContext = vm };
-        insertAfterMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        insertAfterMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         insertAfterMenuItem.Command = vm.InsertLineAfterCommand;
         flyout.Items.Add(insertAfterMenuItem);
+
+        var insertLineMenuItem = new MenuItem { Header = Se.Language.General.InsertLine, DataContext = vm };
+        insertLineMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsInsertLineNoSelectionVisible)));
+        insertLineMenuItem.Command = vm.InsertLineAtEndCommand;
+        flyout.Items.Add(insertLineMenuItem);
 
         var copyOriginal = new MenuItem { Header = Se.Language.Main.CopyTextFromOriginalToCurrent, Command = vm.ColumnCopyTextFromOriginalToCurrentCommand };
         copyOriginal.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.ShowColumnOriginalText)));
@@ -633,15 +679,15 @@ public static partial class InitListViewAndEditBox
                 new MenuItem { Header = Se.Language.Main.TextDown, Command = vm.ColumnTextDownCommand },
             }
         };
-        columnMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        columnMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(columnMenuItem);
 
         var sep1 = new Separator { DataContext = vm };
-        sep1.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        sep1.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(sep1);
 
         var splitMenuItem = new MenuItem { Header = Se.Language.General.SplitLine, DataContext = vm };
-        splitMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        splitMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         splitMenuItem.Command = vm.SplitCommand;
         flyout.Items.Add(splitMenuItem);
 
@@ -656,31 +702,31 @@ public static partial class InitListViewAndEditBox
         flyout.Items.Add(mergeNextMenuItem);
 
         var mergeSelectedMenuItem = new MenuItem { Header = Se.Language.General.MergeSelected, DataContext = vm };
-        mergeSelectedMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        mergeSelectedMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         mergeSelectedMenuItem.Command = vm.MergeSelectedLinesCommand;
         flyout.Items.Add(mergeSelectedMenuItem);
         vm.MenuItemMerge = mergeSelectedMenuItem;
 
         var mergeSelectedAsDialogMenuItem = new MenuItem { Header = Se.Language.General.MergeSelectedAsDialog, DataContext = vm };
-        mergeSelectedAsDialogMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        mergeSelectedAsDialogMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         mergeSelectedAsDialogMenuItem.Command = vm.MergeSelectedLinesDialogCommand;
         flyout.Items.Add(mergeSelectedAsDialogMenuItem);
         vm.MenuItemMergeAsDialog = mergeSelectedAsDialogMenuItem;
 
         var extendToLineBeforeMenuItem = new MenuItem { Header = Se.Language.General.ExtendBefore, DataContext = vm };
-        extendToLineBeforeMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        extendToLineBeforeMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         extendToLineBeforeMenuItem.Command = vm.ExtendSelectedToPreviousCommand;
         flyout.Items.Add(extendToLineBeforeMenuItem);
         vm.MenuItemExtendToLineBefore = extendToLineBeforeMenuItem;
 
         var extendToLineAfterMenuItem = new MenuItem { Header = Se.Language.General.ExtendAfter, DataContext = vm };
-        extendToLineAfterMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        extendToLineAfterMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         extendToLineAfterMenuItem.Command = vm.ExtendSelectedToPreviousCommand;
         flyout.Items.Add(extendToLineAfterMenuItem);
         vm.MenuItemExtendToLineAfter = extendToLineAfterMenuItem;
 
         var sep2 = new Separator { DataContext = vm };
-        sep2.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        sep2.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(sep2);
 
         var RemoveFormattingMenuItem = new MenuItem
@@ -733,7 +779,7 @@ public static partial class InitListViewAndEditBox
                 },
             }
         };
-        RemoveFormattingMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        RemoveFormattingMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(RemoveFormattingMenuItem);
 
 
@@ -743,7 +789,7 @@ public static partial class InitListViewAndEditBox
             Command = vm.ToggleLinesItalicCommand,
             DataContext = vm,
         };
-        italicMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        italicMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(italicMenuItem);
 
         var boldMenuItem = new MenuItem
@@ -752,7 +798,7 @@ public static partial class InitListViewAndEditBox
             Command = vm.ToggleLinesBoldCommand,
             DataContext = vm,
         };
-        boldMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        boldMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(boldMenuItem);
 
         var colorMenuItem = new MenuItem
@@ -761,7 +807,7 @@ public static partial class InitListViewAndEditBox
             Command = vm.ShowColorPickerCommand,
             DataContext = vm,
         };
-        colorMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        colorMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(colorMenuItem);
 
         var fontNameMenuItem = new MenuItem
@@ -770,7 +816,7 @@ public static partial class InitListViewAndEditBox
             Command = vm.ShowFontNamePickerCommand,
             DataContext = vm,
         };
-        fontNameMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        fontNameMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(fontNameMenuItem);
 
 
@@ -780,7 +826,7 @@ public static partial class InitListViewAndEditBox
             Command = vm.ShowAlignmentPickerCommand,
             DataContext = vm,
         };
-        alignmentMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        alignmentMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(alignmentMenuItem);
 
         var bookmarkMenuItem = new MenuItem
@@ -789,7 +835,7 @@ public static partial class InitListViewAndEditBox
             Command = vm.AddOrEditBookmarkCommand,
             DataContext = vm,
         };
-        bookmarkMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        bookmarkMenuItem.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(bookmarkMenuItem);
 
         var menuItemSelectedLines = new MenuItem
@@ -868,14 +914,14 @@ public static partial class InitListViewAndEditBox
                 },
             }
         };
-        menuItemSelectedLines.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridFlyoutHeaderVisible)) { Converter = inverseBooleanConverter });
+        menuItemSelectedLines.Bind(Visual.IsVisibleProperty, new Binding(nameof(vm.IsSubtitleGridDataMenuVisible)));
         flyout.Items.Add(menuItemSelectedLines);
 
 
-        // Set the ContextFlyout property
-        vm.SubtitleGrid.ContextFlyout = flyout;
-        vm.SubtitleGrid.AddHandler(InputElement.PointerPressedEvent, vm.SubtitleGrid_PointerPressed, RoutingStrategies.Tunnel);
-        vm.SubtitleGrid.AddHandler(InputElement.PointerReleasedEvent, vm.SubtitleGrid_PointerReleased, RoutingStrategies.Tunnel);
+        // Set the ContextFlyout on the drop host so right-clicks on empty space also show the menu
+        dropHost.ContextFlyout = flyout;
+        dropHost.AddHandler(InputElement.PointerPressedEvent, vm.SubtitleGrid_PointerPressed, RoutingStrategies.Tunnel);
+        dropHost.AddHandler(InputElement.PointerReleasedEvent, vm.SubtitleGrid_PointerReleased, RoutingStrategies.Tunnel);
 
         // Edit area - restructured with time controls on left, multiline text on right
         var editGrid = new Grid

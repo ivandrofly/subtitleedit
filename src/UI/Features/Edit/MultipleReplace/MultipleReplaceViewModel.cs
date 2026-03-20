@@ -32,6 +32,8 @@ public partial class MultipleReplaceViewModel : ObservableObject
     [ObservableProperty] private RuleTreeNode? _selectedNode;
     [ObservableProperty] private bool _isEditPanelVisible;
     [ObservableProperty] private bool _isFixDetailPanelVisible;
+    [ObservableProperty] private bool _isMultipleReplaceDotDotDotButtonsVisible;
+    [ObservableProperty] private string _fixesInfo;
     [ObservableProperty] private ObservableCollection<ReplaceExpression> _selectedFixHits;
     public ObservableCollection<MultipleReplaceTypeItem> RuleTypes { get; }
     [ObservableProperty] private MultipleReplaceTypeItem? _selectedRuleType;
@@ -56,8 +58,10 @@ public partial class MultipleReplaceViewModel : ObservableObject
 
         Fixes = new ObservableCollection<MultipleReplaceFix>();
         SelectedFixHits = new ObservableCollection<ReplaceExpression>();
+        FixesInfo = string.Empty;
         Nodes = new ObservableCollection<RuleTreeNode>(GetNodes());
         RulesTreeView = new TreeView();
+        IsMultipleReplaceDotDotDotButtonsVisible = Se.Settings.Tools.MultipleReplaceShowDotDotDotButtons;
 
         _compiledRegExList = new Dictionary<string, Regex>();
 
@@ -251,7 +255,6 @@ public partial class MultipleReplaceViewModel : ObservableObject
     {
         GeneratePreview();
         UndoUnchecked();
-        SaveSettings();
         OkPressed = true;
         Window?.Close();
     }
@@ -405,7 +408,16 @@ public partial class MultipleReplaceViewModel : ObservableObject
 
         if (result.OkPressed)
         {
-            var rule = MakeRuleTreeNode(node, result);
+            var rule = new RuleTreeNode(node, new MultipleReplaceRule
+            {
+                Active = true,
+                Description = result.Description,
+                Find = result.FindWhat,
+                ReplaceWith = result.ReplaceWith,
+                Type = result.IsRegularExpression ? MultipleReplaceType.RegularExpression :
+                    result.IsCaseSensitive ? MultipleReplaceType.CaseSensitive :
+                    MultipleReplaceType.CaseInsensitive,
+            });
             node.SubNodes?.Add(rule);
 
             Dispatcher.UIThread.Post(() =>
@@ -843,11 +855,68 @@ public partial class MultipleReplaceViewModel : ObservableObject
                 NodeDuplicate(node);
             }
         }
+        else if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
+        {
+            e.Handled = true;
+            _ = FindRule();
+        }
         else if (UiUtil.IsHelp(e))
         {
             e.Handled = true;
             UiUtil.ShowHelp("features/edit");
         }
+    }
+
+    private async Task FindRule()
+    {
+        if (Window == null)
+        {
+            return;
+        }
+
+        var result = await _windowService.ShowDialogAsync<FindRuleWindow, FindRuleViewModel>(Window,
+            vm => { vm.Initialize(Nodes); });
+
+        if (!result.OkPressed || result.SelectedRule == null)
+        {
+            return;
+        }
+
+        NavigateToRule(result.SelectedRule);
+    }
+
+    internal void NavigateToRule(RuleTreeNode? rule)
+    {
+        if (rule == null)
+        {
+            return;
+        }
+
+        var parent = rule.Parent;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            var allTreeViewItems = FindAllTreeViewItems(RulesTreeView);
+            foreach (var item in allTreeViewItems)
+            {
+                if (item.DataContext == parent)
+                {
+                    item.IsExpanded = true;
+                    break;
+                }
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                SelectedNode = rule;
+                var container = RulesTreeView.ContainerFromItem(rule) as TreeViewItem;
+                if (container != null)
+                {
+                    container.BringIntoView();
+                    container.Focus(NavigationMethod.Directional);
+                }
+            }, DispatcherPriority.Input);
+        }, DispatcherPriority.Background);
     }
 
     internal void RulesTreeView_KeyDown(object? sender, KeyEventArgs e)
@@ -1041,9 +1110,8 @@ public partial class MultipleReplaceViewModel : ObservableObject
         {
             Fixes.Clear();
             Fixes.AddRange(fixes);
+            FixesInfo = string.Format(Se.Language.Edit.MultipleReplace.XLinesAffected, TotalReplaced);
         });
-
-        //groupBoxLinesFound.Text = string.Format(LanguageSettings.Current.MultipleReplace.LinesFoundX, fixedLines);
     }
 
     private HashSet<ReplaceExpression> BuildReplaceExpressions()
@@ -1114,6 +1182,7 @@ public partial class MultipleReplaceViewModel : ObservableObject
 
     internal void OnClosing()
     {
+        SaveSettings();
         UiUtil.SaveWindowPosition(Window);
     }
 

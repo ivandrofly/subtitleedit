@@ -11,6 +11,8 @@ public class LanguageMultipleReplace
     public string CategoryName { get; set; }
     public string ExportReplaceRules { get; set; }
     public string AppliedRules { get; set; }
+    public string FindRule { get; set; }
+    public string XLinesAffected { get; set; }
 
     public LanguageMultipleReplace()
     {
@@ -22,5 +24,7 @@ public class LanguageMultipleReplace
         CategoryName = "Category name";
         ExportReplaceRules = "Export rules";
         AppliedRules = "Applied rules";
+        FindRule = "Find rule";
+        XLinesAffected = "{0:#,##0} lines affected";
     }
 }
