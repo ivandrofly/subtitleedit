@@ -32,14 +32,22 @@ public static class ShortcutsMain
     public static List<ShortCut> GetAllShortcuts(MainViewModel vm)
     {
         var shortcuts = new List<ShortCut>();
-        var keys = Se.Settings.Shortcuts
-            .GroupBy(p => p.ActionName)
-            .ToDictionary(g => g.Key, g => g.First());
+        var shortcutLookup = Se.Settings.Shortcuts
+            .ToLookup(p => p.ActionName);
         foreach (var shortcut in GetAllAvailableShortcuts(vm))
         {
-            shortcuts.Add(keys.TryGetValue(shortcut.Name, out var match)
-                ? new ShortCut(shortcut, match)
-                : new ShortCut(shortcut));
+            var matches = shortcutLookup[shortcut.Name].ToList();
+            if (matches.Count > 0)
+            {
+                foreach (var match in matches)
+                {
+                    shortcuts.Add(new ShortCut(shortcut, match));
+                }
+            }
+            else
+            {
+                shortcuts.Add(new ShortCut(shortcut));
+            }
         }
 
         return shortcuts;
