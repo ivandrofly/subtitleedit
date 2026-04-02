@@ -1,0 +1,40 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore SubtitleEdit.sln
+
+      - name: Build
+        run: dotnet build SubtitleEdit.sln --configuration Release --no-restore
+
+      - name: Test libse
+        run: dotnet test tests/libse/LibSETests.csproj --configuration Release --no-build --logger "trx;LogFileName=libse-tests.trx" --verbosity normal
+
+      - name: Test UI
+        run: dotnet test tests/UI/UITests.csproj --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx" --verbosity normal
+        env:
+          DISPLAY: ':0'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: test-results
+          path: tests/**/*.trx
