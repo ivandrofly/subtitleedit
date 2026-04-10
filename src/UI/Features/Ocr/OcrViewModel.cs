@@ -49,7 +49,6 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using static Nikse.SubtitleEdit.Logic.Ocr.BinaryOcrMatcher;
 
 namespace Nikse.SubtitleEdit.Features.Ocr;
 
@@ -1571,7 +1570,6 @@ public partial class OcrViewModel : ObservableObject
                 maxShownProgress = Math.Max(maxShownProgress, currentItemNumber);
                 UpdateOcrProgress(maxShownProgress, numberOfImages);
 
-                var scrollToIndex = number;
                 var item = p.Item;
                 if (item == null)
                 {
@@ -1650,7 +1648,6 @@ public partial class OcrViewModel : ObservableObject
                 maxShownProgress = Math.Max(maxShownProgress, currentItemNumber);
                 UpdateOcrProgress(maxShownProgress, numberOfImages);
 
-                var scrollToIndex = number;
                 var item = p.Item;
                 if (item == null)
                 {
@@ -1719,7 +1716,6 @@ public partial class OcrViewModel : ObservableObject
                 maxShownProgress = Math.Max(maxShownProgress, currentItemNumber);
                 UpdateOcrProgress(maxShownProgress, numberOfImages);
 
-                var scrollToIndex = number;
                 var item = p.Item;
                 if (item == null)
                 {
@@ -1858,8 +1854,8 @@ public partial class OcrViewModel : ObservableObject
 
                             if (result.OkPressed)
                             {
-                                var letterBitmap = letters[letterIndex].NikseBitmap;
-                                _nOcrAddHistoryManager.Add(result.NOcrChar, letterBitmap,
+                                var previewBitmap = result.PreviewBitmap ?? letters[letterIndex].NikseBitmap;
+                                _nOcrAddHistoryManager.Add(result.NOcrChar, previewBitmap,
                                     OcrSubtitleItems.IndexOf(item));
                                 IsInspectAdditionsVisible = true;
                                 _nOcrDb.Add(result.NOcrChar);
@@ -1905,7 +1901,13 @@ public partial class OcrViewModel : ObservableObject
                     }
                     else
                     {
-                        matches.Add(new NOcrChar { Text = _nOcrCaseFixer.FixUppercaseLowercaseIssues(splitterItem, match), Italic = match.Italic, ImageSplitterItem = splitterItem });
+                        var inspectMatch = new NOcrChar(match)
+                        {
+                            Text = _nOcrCaseFixer.FixUppercaseLowercaseIssues(splitterItem, match),
+                            ExpandCount = match.ExpandCount,
+                            ImageSplitterItem = splitterItem,
+                        };
+                        matches.Add(inspectMatch);
                     }
                 }
 
@@ -1994,6 +1996,7 @@ public partial class OcrViewModel : ObservableObject
                         }
                     }
 
+                    RefreshSpellCheckColoring(i, item);
                     tcs.SetResult(true);
                 });
                 await tcs.Task;
@@ -2242,19 +2245,10 @@ public partial class OcrViewModel : ObservableObject
                             {
                                 if (result.BinaryOcrBitmap != null)
                                 {
-                                    var letterBitmap = letters[letterIndex].NikseBitmap;
-                                    _binaryOcrAddHistoryManager.Add(result.BinaryOcrBitmap, letterBitmap,
+                                    var previewBitmap = result.PreviewBitmap ?? letters[letterIndex].NikseBitmap;
+                                    _binaryOcrAddHistoryManager.Add(result.BinaryOcrBitmap, previewBitmap, result.PreviewTopMargin,
                                         OcrSubtitleItems.IndexOf(item));
                                     IsInspectAdditionsVisible = true;
-
-                                    if (result.FirstBinaryOcrBitmap != null)
-                                    {
-                                        result.BinaryOcrBitmap.Width = result.FirstBinaryOcrBitmap.Width;
-                                        result.BinaryOcrBitmap.Height = result.FirstBinaryOcrBitmap.Height;
-                                        result.BinaryOcrBitmap.NumberOfColoredPixels = result.FirstBinaryOcrBitmap.NumberOfColoredPixels;
-                                        result.BinaryOcrBitmap.Hash = result.FirstBinaryOcrBitmap.Hash;
-                                        result.BinaryOcrBitmap.Colors = result.FirstBinaryOcrBitmap.Colors;
-                                    }
 
                                     db.Add(result.BinaryOcrBitmap);
                                     _ = Task.Run(() => db.Save());
@@ -2362,6 +2356,7 @@ public partial class OcrViewModel : ObservableObject
                         }
                     }
 
+                    RefreshSpellCheckColoring(i, item);
                     tcs.SetResult(true);
                 });
                 await tcs.Task;
@@ -2373,6 +2368,17 @@ public partial class OcrViewModel : ObservableObject
         }
 
         IsOcrRunning = false;
+    }
+
+    private void RefreshSpellCheckColoring(int lineIndex, OcrSubtitleItem item)
+    {
+        if (!_ocrFixEngine.IsLoaded() || SelectedDictionary == null || SelectedDictionary.Name == GetDictionaryNameNone())
+        {
+            return;
+        }
+
+        var updatedResult = _ocrFixEngine.FixOcrErrors(lineIndex, item, DoTryToGuessUnknownWords);
+        item.FixResult = updatedResult;
     }
 
     private static void ChangeWord(OcrSubtitleItem item, UnknownWordItem unknownWord, string word)
@@ -2407,7 +2413,7 @@ public partial class OcrViewModel : ObservableObject
             }
             else
             {
-                Se.LogError($"OCR-repalce: Could not find word '{unknownWord.Word.FixedWord}' in text '{item.Text}' to replace with '{word}' at index {unknownWord.Word.WordIndex}");
+                Se.LogError($"OCR-replace: Could not find word '{unknownWord.Word.FixedWord}' in text '{item.Text}' to replace with '{word}' at index {unknownWord.Word.WordIndex}");
             }
         }
     }
@@ -2648,7 +2654,69 @@ public partial class OcrViewModel : ObservableObject
                 var text = await tesseractOcr.Ocr(bitmap, language, cancellationToken);
                 item.Text = text;
 
-                OcrFixLineAndSetText(i, item);
+                var unknownWords = OcrFixLineAndSetText(i, item);
+
+                if (DoPromptForUnknownWords && unknownWords.Count > 0)
+                {
+                    var tcs = new TaskCompletionSource<bool>();
+                    Dispatcher.UIThread.Post(async () =>
+                    {
+                        foreach (var unknownWord in unknownWords)
+                        {
+                            var suggestions = _ocrFixEngine.GetSpellCheckSuggestions(unknownWord.Word.FixedWord);
+                            var result = await _windowService.ShowDialogAsync<PromptUnknownWordWindow, PromptUnknownWordViewModel>(Window!,
+                                vm => { vm.Initialize(item.GetBitmap(), item.Text, unknownWord, suggestions); });
+
+                            if (result.ChangeWholeTextPressed)
+                            {
+                                item.Text = result.WholeText;
+                                break;
+                            }
+                            else if (result.ChangeOncePressed)
+                            {
+                                ChangeWord(item, unknownWord, result.Word);
+                            }
+                            else if (result.ChangeAllPressed)
+                            {
+                                ChangeWord(item, unknownWord, result.Word);
+                                _ocrFixEngine.ChangeAll(unknownWord.Word.Word, result.Word);
+                            }
+                            else if (result.SkipOncePressed)
+                            {
+                                // do nothing
+                            }
+                            else if (result.SkipAllPressed)
+                            {
+                                _ocrFixEngine.SkipAll(unknownWord.Word.Word);
+                            }
+                            else if (result.AddToNamesListPressed)
+                            {
+                                _ocrFixEngine.AddName(unknownWord.Word.Word);
+                            }
+                            else if (result.AddToUserDictionaryPressed)
+                            {
+                                if (SelectedDictionary != null)
+                                {
+                                    UserWordsHelper.AddToUserDictionary(unknownWord.Word.Word, SelectedDictionary.GetFiveLetterLanguageName() ?? "en_US");
+                                }
+                            }
+                            else
+                            {
+                                _cancellationTokenSource.Cancel();
+                                IsOcrRunning = false;
+                                break;
+                            }
+                        }
+
+                        RefreshSpellCheckColoring(i, item);
+                        tcs.SetResult(true);
+                    });
+                    await tcs.Task;
+                    if (!IsOcrRunning)
+                    {
+                        return;
+                    }
+                }
             }
 
             PauseOcr();

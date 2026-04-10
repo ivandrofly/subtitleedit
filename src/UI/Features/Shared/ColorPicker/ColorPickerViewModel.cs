@@ -1,6 +1,5 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -32,6 +31,8 @@ public partial class ColorPickerViewModel : ObservableObject
     [ObservableProperty] private Color _blueGradientEnd = Colors.Blue;
     [ObservableProperty] private Color _alphaGradientStart = Colors.Transparent;
     [ObservableProperty] private Color _alphaGradientEnd = Colors.White;
+
+    [ObservableProperty] private bool _showAlpha = true;
 
     [ObservableProperty] private Color _lastColorPickerColor;
     [ObservableProperty] private Color _lastColorPickerColor1;

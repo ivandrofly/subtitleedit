@@ -58,6 +58,8 @@ jobs:
         run: |
           dotnet publish src/UI/UI.csproj -c ${{ inputs.build_configuration }} -r win-x64 --self-contained true `
             -p:PublishSingleFile=true `
+            -p:DebugSymbols=false `
+            -p:DebugType=none `
             -o ./publish/windows-x64
           Copy-Item "libmpv-temp/libmpv-2.dll" "./publish/windows-x64/"
 
@@ -65,12 +67,9 @@ jobs:
         run: |
           dotnet publish src/UI/UI.csproj -c ${{ inputs.build_configuration }} -r win-arm64 --self-contained true `
             -p:PublishSingleFile=true `
+            -p:DebugSymbols=false `
+            -p:DebugType=none `
             -o ./publish/windows-arm64
-
-      - name: Remove PDB files
-        run: |
-          Get-ChildItem -Path "./publish/windows-x64/" -Recurse -Include *.pdb | Remove-Item -Force
-          Get-ChildItem -Path "./publish/windows-arm64/" -Recurse -Include *.pdb | Remove-Item -Force
 
       # - name: Setup WiX
       #   run: |
@@ -104,9 +103,10 @@ jobs:
         run: |
           dotnet publish src/UI/UI.csproj -c ${{ inputs.build_configuration }} -r win-x64 --self-contained false `
             -p:PublishSingleFile=true `
+            -p:DebugSymbols=false `
+            -p:DebugType=none `
             -o ./src/UI/bin/Release/net10.0/publish
           Copy-Item "libmpv-temp/libmpv-2.dll" "./src/UI/bin/Release/net10.0/publish/"
-          Get-ChildItem -Path "./src/UI/bin/Release/net10.0/publish/" -Recurse -Include *.pdb | Remove-Item -Force
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
@@ -289,11 +289,10 @@ jobs:
         run: |
           dotnet publish src/UI/UI.csproj -c ${{ inputs.build_configuration }} -r osx-x64 --self-contained true \
             -p:PublishSingleFile=true \
+            -p:DebugSymbols=false \
+            -p:DebugType=none \
             -o ./publish/macos-x64
-          
-          # Remove PDB files immediately
-          find "./publish/macos-x64/" -name "*.pdb" -type f -delete
-          
+
           echo "Disk space after x64 publish:"; df -h /
       
       - name: Update Info.plist with version from Se.cs
@@ -372,11 +371,10 @@ jobs:
           
           dotnet publish src/UI/UI.csproj -c ${{ inputs.build_configuration }} -r osx-arm64 --self-contained true \
             -p:PublishSingleFile=true \
+            -p:DebugSymbols=false \
+            -p:DebugType=none \
             -o ./publish/macos-arm64
-          
-          # Remove PDB files immediately
-          find "./publish/macos-arm64/" -name "*.pdb" -type f -delete
-          
+
           echo "Disk space after ARM64 publish:"; df -h /
       
       - name: Create, sign, and package ARM64 DMG
@@ -526,11 +524,9 @@ jobs:
         run: |
           dotnet publish src/UI/UI.csproj -c ${{ inputs.build_configuration }} -r linux-x64 --self-contained true \
             -p:PublishSingleFile=true \
+            -p:DebugSymbols=false \
+            -p:DebugType=none \
             -o ./publish/linux-x64
-
-      - name: Remove PDB files from Linux artifacts
-        run: |
-          find "./publish/linux-x64/" -name "*.pdb" -type f -delete
 
       - name: Create Linux TAR package
         run: |
@@ -548,36 +544,36 @@ jobs:
           name: linux-tar-package
           path: ./SubtitleEdit-Linux-x64.tar.gz
 
-  build-linux-flatpak:
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
-      options: --privileged
+  # build-linux-flatpak:
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+  #     options: --privileged
 
-    steps:
-      - uses: actions/checkout@v5
+  #   steps:
+  #     - uses: actions/checkout@v5
 
-      - name: Update metainfo version/date from Se.cs
-        run: bash installer/flatpak/update-metainfo-version.sh
+  #     - name: Update metainfo version/date from Se.cs
+  #       run: bash installer/flatpak/update-metainfo-version.sh
 
-      - name: Build flatpak bundle
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          bundle: SubtitleEdit-linux-x64.flatpak
-          manifest-path: installer/flatpak/dk.nikse.subtitleedit.yaml
-          cache-key: flatpak-builder-${{ hashFiles('installer/flatpak/dk.nikse.subtitleedit.yaml', 'installer/flatpak/nuget-sources.json') }}
-          arch: x86_64
+  #     - name: Build flatpak bundle
+  #       uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+  #       with:
+  #         bundle: SubtitleEdit-linux-x64.flatpak
+  #         manifest-path: installer/flatpak/dk.nikse.subtitleedit.yaml
+  #         cache-key: flatpak-builder-${{ hashFiles('installer/flatpak/dk.nikse.subtitleedit.yaml', 'installer/flatpak/nuget-sources.json') }}
+  #         arch: x86_64
 
-      - name: Upload flatpak bundle artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: flatpak-bundle
-          path: SubtitleEdit-linux-x64.flatpak
-          overwrite: true
+  #     - name: Upload flatpak bundle artifact
+  #       uses: actions/upload-artifact@v5
+  #       with:
+  #         name: flatpak-bundle
+  #         path: SubtitleEdit-linux-x64.flatpak
+  #         overwrite: true
 
   create-release:
     if: ${{ inputs.create_release }}
-    needs: [build-windows, build-macos, build-linux, build-linux-flatpak]
+    needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -589,7 +585,7 @@ jobs:
         id: tag
         run: |
           if [ -n "${{ inputs.release_tag }}" ]; then
-            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+            echo "tag=$(echo '${{ inputs.release_tag }}' | xargs)" >> $GITHUB_OUTPUT
           else
             timestamp=$(date +"%Y%m%d-%H%M%S")
             echo "tag=pre-release-${timestamp}" >> $GITHUB_OUTPUT
@@ -610,7 +606,7 @@ jobs:
           cp ./artifacts/windows-zip-packages/*.zip ./release-assets/
           cp ./artifacts/macos-dmg-packages/*.dmg ./release-assets/
           cp ./artifacts/linux-tar-package/*.tar.gz ./release-assets/
-          cp ./artifacts/flatpak-bundle/*.flatpak ./release-assets/
+          #cp ./artifacts/flatpak-bundle/*.flatpak ./release-assets/
 
           # List all files that will be uploaded
           echo "Release assets:"
@@ -639,7 +635,7 @@ jobs:
             - **macOS ARM64 (Apple Silicon - M1/M2/M3/M4 architecture):** [SubtitleEdit-macOS-ARM64.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/SubtitleEdit-macOS-ARM64.dmg)
             - **macOS x64 (Intel 64-bit):** [SubtitleEdit-macOS-x64.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/SubtitleEdit-macOS-x64.dmg)
             - **Linux x64 (tarball):** [SubtitleEdit-Linux-x64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/SubtitleEdit-Linux-x64.tar.gz)
-            - **Linux x64 (Flatpak):** [SubtitleEdit-linux-x64.flatpak](https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/SubtitleEdit-linux-x64.flatpak)
+            #- **Linux x64 (Flatpak):** [SubtitleEdit-linux-x64.flatpak](https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/SubtitleEdit-linux-x64.flatpak)
       
             ### Installation
             1. Read and fix requirements, please see [System Requirements](https://github.com/niksedk/subtitleedit-avalonia#system-requirements)
@@ -660,4 +656,4 @@ jobs:
             ./release-assets/SubtitleEdit-macOS-ARM64.dmg
             ./release-assets/SubtitleEdit-macOS-x64.dmg
             ./release-assets/SubtitleEdit-Linux-x64.tar.gz
-            ./release-assets/SubtitleEdit-linux-x64.flatpak
+            #./release-assets/SubtitleEdit-linux-x64.flatpak

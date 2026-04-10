@@ -276,6 +276,10 @@ public class LanguageSettings
     public string WaveformToolbarItems { get; set; }
     public string MatchIconColorToDarkTheme { get; set; }
     public string SubtitlePreviewProperties { get; set; }
+    public string PixelWidthInfo { get; set; }
+    public string SpellCheckEngineHunSpelll { get; set; }
+    public string SpellCheckEngineMsWord { get; set; }
+    public string SpellCheckEngine { get; set; }
 
     public LanguageSettings()
     {
@@ -548,6 +552,10 @@ public class LanguageSettings
         WaveformToolbarItems = "Waveform toolbar items";
         MatchIconColorToDarkTheme = "Match icon color to dark theme foreground color";
         SubtitlePreviewProperties = "Subtitle preview properties";
+        PixelWidthInfo = "Green lines = max-width limit   |   Red area = text exceeds limit";
+        SpellCheckEngineHunSpelll = "Hunspell";
+        SpellCheckEngineMsWord = "MS Word";
+        SpellCheckEngine = "Spell check engine";
     }
 
     public string GetContinuationStyleName(ContinuationStyle continuationStyle)

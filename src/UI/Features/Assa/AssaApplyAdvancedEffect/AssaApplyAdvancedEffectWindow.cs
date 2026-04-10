@@ -85,29 +85,24 @@ public class AssaApplyAdvancedEffectWindow : Window
                     activeGlowRow.Children.Add(new TextBlock { Text = Se.Language.Assa.AdvancedEffectFancyKaraokeGlow, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
                     var applyGlowCheckBox = UiUtil.MakeCheckBox(fancyKaraokeItem, nameof(AdvancedEffectFancyKaraoke.ApplyGlow));
                     activeGlowRow.Children.Add(applyGlowCheckBox);
-                    var activeGlowColorPicker = UiUtil.MakeColorPicker(fancyKaraokeItem, nameof(AdvancedEffectFancyKaraoke.GlowColor));
+                    var activeGlowColorButton = UiUtil.MakeColorPickerButton(fancyKaraokeItem, nameof(AdvancedEffectFancyKaraoke.GlowColor), false);
                     // Show/hide the row based on the checkbox state
-                    activeGlowColorPicker.Bind(ColorPicker.IsVisibleProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = applyGlowCheckBox, Mode = BindingMode.OneWay });
-                    activeGlowRow.Children.Add(activeGlowColorPicker);
+                    activeGlowColorButton.Bind(Button.IsVisibleProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = applyGlowCheckBox, Mode = BindingMode.OneWay });
+                    activeGlowRow.Children.Add(activeGlowColorButton);
 
                     var activeColorRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
                     activeColorRow.Children.Add(new TextBlock { Text = Se.Language.Assa.AdvancedEffectFancyKaraokeActiveColor, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
-                    activeColorRow.Children.Add(UiUtil.MakeColorPicker(fancyKaraokeItem, nameof(AdvancedEffectFancyKaraoke.ActiveWordColor)));
+                    activeColorRow.Children.Add(UiUtil.MakeColorPickerButton(fancyKaraokeItem, nameof(AdvancedEffectFancyKaraoke.ActiveWordColor), false));
 
                     var inactiveColorRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
                     inactiveColorRow.Children.Add(new TextBlock { Text = Se.Language.Assa.AdvancedEffectFancyKaraokeInactiveColor, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
-                    inactiveColorRow.Children.Add(UiUtil.MakeColorPicker(fancyKaraokeItem, nameof(AdvancedEffectFancyKaraoke.InactiveWordColor)));
-
-                    var opacityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 6, 0, 0) };
-                    opacityRow.Children.Add(new TextBlock { Text = Se.Language.Assa.AdvancedEffectFancyKaraokeInactiveOpacity, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
-                    opacityRow.Children.Add(UiUtil.MakeNumericUpDownInt(0, 255, 0x90, 130, fancyKaraokeItem, nameof(AdvancedEffectFancyKaraoke.InactiveAlpha)));
+                    inactiveColorRow.Children.Add(UiUtil.MakeColorPickerButton(fancyKaraokeItem, nameof(AdvancedEffectFancyKaraoke.InactiveWordColor), true));
 
                     var settingsStack = new StackPanel { Spacing = 2 };
                     settingsStack.Children.Add(autoDetectActiveWordRow);
                     settingsStack.Children.Add(activeGlowRow);
                     settingsStack.Children.Add(activeColorRow);
                     settingsStack.Children.Add(inactiveColorRow);
-                    settingsStack.Children.Add(opacityRow);
                     panel.Children.Add(settingsStack);
                 }
                 else if (item is AdvancedEffectWordSpacing wordSpacingItem)

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Nikse.SubtitleEdit.Logic.Config;
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
@@ -18,6 +19,14 @@ public partial class FindService : IFindService
     private const int MaxSearchHistoryItems = 10;
 
     public IReadOnlyList<string> SearchHistory => _searchHistory.AsReadOnly();
+
+    public FindService()
+    {
+        foreach (var findHistory in Se.Settings.Tools.FindHistory)
+        {
+            _searchHistory.Add(findHistory);
+        }
+    }
 
     public void Initialize(List<string> textLines, int currentLineNumber, bool wholeWord, FindMode findMode)
     {
@@ -254,11 +263,6 @@ public partial class FindService : IFindService
         ResetSearchState();
     }
 
-    public void ClearSearchHistory()
-    {
-        _searchHistory.Clear();
-    }
-
     public void RemoveFromSearchHistory(string searchText)
     {
         _searchHistory.Remove(searchText);
@@ -289,6 +293,8 @@ public partial class FindService : IFindService
         {
             _searchHistory.RemoveAt(_searchHistory.Count - 1);
         }
+
+        Se.Settings.Tools.FindHistory = _searchHistory;
     }
 
     private (int lineIndex, int textIndex, string foundText) FindInList(string searchText, int startLineIndex, int startTextIndex = 0)

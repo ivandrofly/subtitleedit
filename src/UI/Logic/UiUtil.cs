@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Input;
+using Nikse.SubtitleEdit.Features.Shared.ColorPicker;
 using Nikse.SubtitleEdit.Logic.Config;
 using Nikse.SubtitleEdit.Logic.ValueConverters;
 using Projektanker.Icons.Avalonia;
@@ -17,6 +18,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 
 namespace Nikse.SubtitleEdit.Logic;
 
@@ -173,26 +175,26 @@ public static class UiUtil
         return new Color(128, color.R, color.G, color.B);
     }
 
-    public static Separator MakeVerticalSeperator(double height = 0.5, double opacity = 0.5, Thickness? margin = null,
-        IBrush? backgroud = null)
+    public static Separator MakeHorizontalSeparator(double height = 0.5, double opacity = 0.5, Thickness? margin = null,
+        IBrush? background = null)
     {
         return new Separator
         {
             Height = height,
             Margin = margin ?? new Thickness(5, 1),
-            Background = backgroud ?? GetBorderBrush(),
+            Background = background ?? GetBorderBrush(),
             Opacity = opacity,
         };
     }
 
-    public static Border MakeHorizontalSeperator(double width = 2.5, double opacity = 0.5, Thickness? margin = null,
-        IBrush? backgroud = null)
+    public static Border MakeVerticalSeparator(double width = 2.5, double opacity = 0.5, Thickness? margin = null,
+        IBrush? background = null)
     {
         return new Border
         {
             Width = width,
             Margin = margin ?? new Thickness(1, 5),
-            Background = backgroud ?? GetBorderBrush(),
+            Background = background ?? GetBorderBrush(),
             Opacity = opacity,
             VerticalAlignment = VerticalAlignment.Stretch,
             HorizontalAlignment = HorizontalAlignment.Center
@@ -1584,6 +1586,53 @@ public static class UiUtil
                 Mode = BindingMode.TwoWay
             },
         };
+    }
+
+    internal static Button MakeColorPickerButton(object source, string colorPropertyPath, bool showAlpha)
+    {
+        var propInfo = source.GetType().GetProperty(colorPropertyPath, BindingFlags.Public | BindingFlags.Instance);
+        var initialColor = propInfo?.GetValue(source) is Color c ? c : Colors.White;
+
+        var colorSwatch = new Border
+        {
+            Width = 30,
+            Height = 20,
+            CornerRadius = new CornerRadius(CornerRadius),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Colors.Gray),
+            Background = new SolidColorBrush(initialColor),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var button = new Button
+        {
+            Content = colorSwatch,
+            Padding = new Thickness(4, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        button.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(button) is not Window window)
+            {
+                return;
+            }
+
+            var currentColor = propInfo?.GetValue(source) is Color cc ? cc : Colors.White;
+            var vm = new ColorPickerViewModel();
+            vm.Initialize(currentColor);
+            vm.ShowAlpha = showAlpha;
+            var pickerWindow = new ColorPickerWindow(vm);
+            await pickerWindow.ShowDialog(window);
+
+            if (vm.OkPressed)
+            {
+                propInfo?.SetValue(source, vm.SelectedColor);
+                colorSwatch.Background = new SolidColorBrush(vm.SelectedColor);
+            }
+        };
+
+        return button;
     }
 
     internal static Label MakeLabel(string text = "")

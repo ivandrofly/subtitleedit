@@ -19,6 +19,7 @@ using Nikse.SubtitleEdit.Features.Options.Settings.SyntaxColorTooWideSettings;
 using Nikse.SubtitleEdit.Features.Options.Settings.WaveformToolbarItems;
 using Nikse.SubtitleEdit.Features.Shared;
 using Nikse.SubtitleEdit.Features.Shared.PickSubtitleFormat;
+using Nikse.SubtitleEdit.Features.SpellCheck;
 using Nikse.SubtitleEdit.Logic;
 using Nikse.SubtitleEdit.Logic.Config;
 using Nikse.SubtitleEdit.Logic.Media;
@@ -28,7 +29,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using DownloadFfmpegViewModel = Nikse.SubtitleEdit.Features.Shared.DownloadFfmpegViewModel;
@@ -116,6 +116,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _speechToTextSelectedLinesPromptFistTimeOnly;
     [ObservableProperty] private bool _multipleReplaceShowDotDotDotButtons;
     [ObservableProperty] private bool _gridFocusTextboxAfterInsertNew;
+    [ObservableProperty] private ObservableCollection<string> _spellCheckEngines;
+    [ObservableProperty] private string _selectedSpellCheckEngine;
 
     [ObservableProperty] private bool _showUpDownStartTime;
     [ObservableProperty] private bool _showUpDownEndTime;
@@ -448,6 +450,13 @@ public partial class SettingsViewModel : ObservableObject
         ];
         SelectedSplitOddNumberOfLinesAction = SplitOddNumberOfLinesActions[0];
 
+        SpellCheckEngines = [Se.Language.Options.Settings.SpellCheckEngineHunSpelll];
+        if (WordSpellCheck.IsWordInstalled())
+        {
+            SpellCheckEngines.Add(Se.Language.Options.Settings.SpellCheckEngineMsWord);
+        }
+        SelectedSpellCheckEngine = SpellCheckEngines[0];
+
         WaveformSpaceInfo = string.Empty;
         IsMpvChosen = true;
 
@@ -590,6 +599,7 @@ public partial class SettingsViewModel : ObservableObject
         GoToLineNumberAlsoSetVideoPosition = Se.Settings.Tools.GoToLineNumberAlsoSetVideoPosition;
         AdjustAllTimesRememberLineSelectionChoice = Se.Settings.Synchronization.AdjustAllTimesRememberLineSelectionChoice;
         SelectedSplitOddNumberOfLinesAction = MapFromSplitOddActionToLanguageCode(Se.Settings.Tools.SplitOddLinesAction);
+        SelectedSpellCheckEngine = MapFromSpellCheckEngine(Se.Settings.SpellCheck.SpellCheckProvider);
         OcrUseWordSplitList = Se.Settings.Ocr.UseWordSplitList;
         SpeechToTextSelectedLinesPromptFistTimeOnly = Se.Settings.Tools.SpeechToTextSelectedLinesPromptFistTimeOnly;
         MultipleReplaceShowDotDotDotButtons = Se.Settings.Tools.MultipleReplaceShowDotDotDotButtons;
@@ -856,6 +866,21 @@ public partial class SettingsViewModel : ObservableObject
         {
             return string.Empty;
         }
+    }
+
+    private static string MapFromSpellCheckEngine(string engine)
+    {
+        if (engine == SeSpellCheck.SpellCheckHunspell)
+        {
+            return Se.Language.Options.Settings.SpellCheckEngineHunSpelll;
+        }
+
+        if (engine == SeSpellCheck.SpellCheckMsWord)
+        {
+            return Se.Language.Options.Settings.SpellCheckEngineMsWord;
+        }
+
+        return Se.Language.Options.Settings.SpellCheckEngineHunSpelll;
     }
 
     private static string MapFromSplitOddActionToLanguageCode(string splitAction)
@@ -1160,6 +1185,7 @@ public partial class SettingsViewModel : ObservableObject
         Se.Settings.Tools.GoToLineNumberAlsoSetVideoPosition = GoToLineNumberAlsoSetVideoPosition;
         Se.Settings.Synchronization.AdjustAllTimesRememberLineSelectionChoice = AdjustAllTimesRememberLineSelectionChoice;
         Se.Settings.Tools.SplitOddLinesAction = MapFromSplitOddActionTranslationToCode(SelectedSplitOddNumberOfLinesAction);
+        Se.Settings.SpellCheck.SpellCheckProvider = MapFromUISpellCheckEngineToCode(SelectedSpellCheckEngine);
         Se.Settings.Ocr.UseWordSplitList = OcrUseWordSplitList;
         Se.Settings.Tools.SpeechToTextSelectedLinesPromptFistTimeOnly = SpeechToTextSelectedLinesPromptFistTimeOnly;
         Se.Settings.Tools.MultipleReplaceShowDotDotDotButtons = MultipleReplaceShowDotDotDotButtons;
@@ -1353,6 +1379,21 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         Se.SaveSettings();
+    }
+
+    private string MapFromUISpellCheckEngineToCode(string spellCheckEngine)
+    {
+        if (spellCheckEngine == Se.Language.Options.Settings.SpellCheckEngineHunSpelll)
+        {
+            return SeSpellCheck.SpellCheckHunspell;
+        }
+
+        if (spellCheckEngine == Se.Language.Options.Settings.SpellCheckEngineMsWord)
+        {
+            return SeSpellCheck.SpellCheckMsWord;
+        }
+
+        return SeSpellCheck.SpellCheckHunspell;
     }
 
     private static string MapWaveformSingleClickFromTranslation(string selectedWaveformSingleClickActionType)

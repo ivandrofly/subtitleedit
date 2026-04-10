@@ -2,7 +2,25 @@
 Subtitle Edit Changelog
 
 
-v5.0.0-beta13 (xth April 2026)
+v5.0.0-beta14 (8th April 2026)
+
+* Add Romanian translation - thx zildan
+* Update Italian translation - thx bovirus
+* Update Portuguese (Brazil) translation - thx igorruckert
+* Fix click on libmpv-wid to toggle play/pause - thx vsemozhetbyt
+* VLC now shows subtitle
+* Fix italic in text box for edit image ocr db
+* Fix for mpv refresh for full screeen player
+* Fix: Allow large text files in batch-convert - thx phannhanhn201
+* Add toggle select sub while playing to video menu (+shortcut) - thx vsemozhetbyt
+* Add "Extend only" to adjust durations - thx Dravic
+* Fix for nOCR load - thx HellbringerOnline
+* Fix for nOCR expanded view - thx HellbringerOnline
+* Fix toolbar separator visibility not updating when setting changes - thx ivandrofly
+
+-----------------------------------------------------------------------------------------------------
+
+v5.0.0-beta13 (2nd April 2026)
 
 * Add Turkish translation - thx Hayri
 * Update Italian translation - thx bovirus

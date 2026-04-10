@@ -67,7 +67,15 @@ public sealed class LibVlcDynamicPlayer : IDisposable, IVideoPlayerInstance
     private delegate long libvlc_media_get_duration(IntPtr media);
     private libvlc_media_get_duration? _libvlc_media_get_duration;
 
-    // LibVLC Video Controls - http://www.videolan.org/developers/vlc/doc/doxygen/html/group__libvlc__video.html#g8f55326b8b51aecb59d8b8a446c3f118
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void libvlc_media_add_option(IntPtr media, byte[] options);
+    private libvlc_media_add_option? _libvlc_media_add_option;
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void libvlc_media_player_set_media(IntPtr mediaPlayer, IntPtr media);
+    private libvlc_media_player_set_media? _libvlc_media_player_set_media;
+
+    // LibVLC Video Controls
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void libvlc_video_get_size(IntPtr mediaPlayer, UInt32 number, out UInt32 x, out UInt32 y);
     private libvlc_video_get_size? _libvlc_video_get_size;
@@ -185,6 +193,10 @@ public sealed class LibVlcDynamicPlayer : IDisposable, IVideoPlayerInstance
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int libvlc_video_set_spu(IntPtr mediaPlayer, int trackNumber);
     private libvlc_video_set_spu? _libvlc_video_set_spu;
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr libvlc_video_get_spu_description(IntPtr mediaPlayer);
+    private libvlc_video_get_spu_description? _libvlc_video_get_spu_description;
 
     /// <summary>
     /// Callback prototype to allocate and lock a picture buffer. Whenever a new video frame needs to be decoded, the lock callback is invoked. Depending on the video chroma, one or three pixel planes of adequate dimensions must be returned via the second parameter. Those planes must be aligned on 32-bytes boundaries.
@@ -310,9 +322,12 @@ public sealed class LibVlcDynamicPlayer : IDisposable, IVideoPlayerInstance
         _libvlc_media_release = (libvlc_media_release)GetDllType(typeof(libvlc_media_release), "libvlc_media_release");
         _libvlc_media_parse_with_options = (libvlc_media_parse_with_options)GetDllType(typeof(libvlc_media_parse_with_options), "libvlc_media_parse_with_options");
         _libvlc_media_get_duration = (libvlc_media_get_duration)GetDllType(typeof(libvlc_media_get_duration), "libvlc_media_get_duration");
+        _libvlc_media_add_option = (libvlc_media_add_option)GetDllType(typeof(libvlc_media_add_option), "libvlc_media_add_option");
+        _libvlc_media_player_set_media = (libvlc_media_player_set_media)GetDllType(typeof(libvlc_media_player_set_media), "libvlc_media_player_set_media");
 
         _libvlc_video_get_size = (libvlc_video_get_size)GetDllType(typeof(libvlc_video_get_size), "libvlc_video_get_size");
         _libvlc_video_set_spu = (libvlc_video_set_spu)GetDllType(typeof(libvlc_video_set_spu), "libvlc_video_set_spu");
+        _libvlc_video_get_spu_description = (libvlc_video_get_spu_description)GetDllType(typeof(libvlc_video_get_spu_description), "libvlc_video_get_spu_description");
         _libvlc_video_set_callbacks = (libvlc_video_set_callbacks)GetDllType(typeof(libvlc_video_set_callbacks), "libvlc_video_set_callbacks");
         _libvlc_video_set_format = (libvlc_video_set_format)GetDllType(typeof(libvlc_video_set_format), "libvlc_video_set_format");
         _libvlc_video_take_snapshot = (libvlc_video_take_snapshot)GetDllType(typeof(libvlc_video_take_snapshot), "libvlc_video_take_snapshot");
@@ -397,6 +412,132 @@ public sealed class LibVlcDynamicPlayer : IDisposable, IVideoPlayerInstance
 
         System.Diagnostics.Debug.WriteLine("Failed to load VLC from any path");
         return false;
+    }
+
+    private string? _currentSubtitleFileName;
+
+    private int _slaveCount = 0;
+
+    public async Task SubAdd(string fileName)
+    {
+        _currentSubtitleFileName = fileName;
+
+        if (_mediaPlayer == IntPtr.Zero || _libvlc_media_player_add_slave == null)
+            return;
+
+        // --- HYBRID LOGIC ---
+        // If we've added more than 100 slaves, the track list is getting messy.
+        // Let's do a full media refresh to clear the internal VLC cache.
+        if (_slaveCount > 100)
+        {
+            await HardReloadWithSub(fileName);
+            return;
+        }
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                string uriPath = PathToUri(fileName);
+                byte[] pathBytes = GetUtf8Bytes(uriPath);
+
+                int result = _libvlc_media_player_add_slave(_mediaPlayer, 0, pathBytes, true);
+
+                if (result == 0)
+                {
+                    _slaveCount++; // Increment our tracker
+
+                    // Small delay to ensure VLC registered the new track
+                    System.Threading.Thread.Sleep(50);
+
+                    // Find the highest ID to ensure we show the LATEST version of the file
+                    int newestId = GetHighestSpuId();
+                    if (newestId != -1)
+                    {
+                        _libvlc_video_set_spu?.Invoke(_mediaPlayer, newestId);
+                    }
+
+                    // Force a frame refresh by "nudging" the time
+                    long currentTime = _libvlc_media_player_get_time?.Invoke(_mediaPlayer) ?? 0;
+
+                    // Seeking to the exact same time often works, 
+                    // but +1ms is a guaranteed trigger for the subtitle decoder.
+                    _libvlc_media_player_set_time?.Invoke(_mediaPlayer, currentTime + 1);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SubAdd Error: {ex.Message}");
+            }
+        });
+    }
+
+    private int GetHighestSpuId()
+    {
+        IntPtr pTrackList = _libvlc_video_get_spu_description?.Invoke(_mediaPlayer) ?? IntPtr.Zero;
+        if (pTrackList == IntPtr.Zero) return -1;
+
+        int highestId = -1;
+        IntPtr pCurrent = pTrackList;
+
+        while (pCurrent != IntPtr.Zero)
+        {
+            var track = Marshal.PtrToStructure<TrackDescription>(pCurrent);
+            if (track.Id > highestId) highestId = track.Id;
+            pCurrent = track.PNext;
+        }
+
+        _libvlc_track_description_release?.Invoke(pTrackList);
+        return highestId;
+    }
+
+    private async Task HardReloadWithSub(string subFileName)
+    {
+        // Save current state
+        long currentTime = _libvlc_media_player_get_time?.Invoke(_mediaPlayer) ?? 0;
+        bool wasPlaying = IsPlaying;
+
+        // Reset the counter
+        _slaveCount = 0;
+
+        // Re-load the video (this destroys the old media and its 100 slaves)
+        await LoadFile(_fileName);
+
+        // Restore time
+        _libvlc_media_player_set_time?.Invoke(_mediaPlayer, currentTime);
+
+        // Add the sub fresh (it will now be ID 1 again)
+        await SubAdd(subFileName);
+
+        if (wasPlaying) Play();
+    }
+
+    private static string PathToUri(string path)
+    {
+        // libvlc_media_player_add_slave expects a URI, not a raw file path
+        if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+        {
+            return path;
+        }
+
+        return new Uri(path).AbsoluteUri;
+    }
+
+    public void SubRemove()
+    {
+        if (_mediaPlayer == IntPtr.Zero || _libvlc_video_set_spu == null) return;
+
+        // -1 disables subtitle rendering
+        _libvlc_video_set_spu(_mediaPlayer, -1);
+    }
+
+    public async Task SubReload()
+    {
+        if (!string.IsNullOrEmpty(_currentSubtitleFileName))
+        {
+            SubRemove(); // Clear current view
+            await SubAdd(_currentSubtitleFileName); // Inject fresh file
+        }
     }
 
     public void LoadLib()
@@ -888,7 +1029,7 @@ public sealed class LibVlcDynamicPlayer : IDisposable, IVideoPlayerInstance
 
             _libvlc_audio_set_track(_mediaPlayer, next.id);
             return new AudioTrackInfo()
-            { 
+            {
                 FfIndex = next.id,
                 Id = next.id,
                 Title = next.name,
