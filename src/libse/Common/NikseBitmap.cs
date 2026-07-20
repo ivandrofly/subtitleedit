@@ -1,5 +1,6 @@
 ﻿using SkiaSharp;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -372,8 +373,16 @@ namespace Nikse.SubtitleEdit.Core.Common
             emphasis2Buffer[2] = emphasis2.Red;
             emphasis2Buffer[3] = emphasis2.Alpha;
 
-            var bufferEqual = new byte[Width * Height];
-            var bufferUnEqual = new byte[Width * Height];
+            // Scratch buffers for the encode loop below; the encoded result is
+            // copied into exact-size arrays at the end, so these are transient
+            // and can come from ArrayPool. Called once per subtitle line during
+            // DVD/VobSub export. The nibble writers OR into existing bytes, so
+            // the rented (dirty) scratch space must be zeroed first.
+            var scratchSize = Width * Height;
+            var bufferEqual = ArrayPool<byte>.Shared.Rent(scratchSize);
+            var bufferUnEqual = ArrayPool<byte>.Shared.Rent(scratchSize);
+            Array.Clear(bufferEqual, 0, scratchSize);
+            Array.Clear(bufferUnEqual, 0, scratchSize);
             int indexBufferEqual = 0;
             int indexBufferUnEqual = 0;
 
@@ -444,6 +453,8 @@ namespace Nikse.SubtitleEdit.Core.Common
             Buffer.BlockCopy(bufferEqual, 0, twoParts.Buffer1, 0, indexBufferEqual);
             twoParts.Buffer2 = new byte[indexBufferUnEqual + 2];
             Buffer.BlockCopy(bufferUnEqual, 0, twoParts.Buffer2, 0, indexBufferUnEqual);
+            ArrayPool<byte>.Shared.Return(bufferEqual);
+            ArrayPool<byte>.Shared.Return(bufferUnEqual);
             return twoParts;
         }
 
