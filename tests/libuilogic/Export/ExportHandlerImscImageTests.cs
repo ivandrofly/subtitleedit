@@ -24,7 +24,7 @@ public class ExportHandlerImscImageTests : IDisposable
             canvas.Clear(SKColors.Transparent);
             using var paint = new SKPaint { Color = SKColors.White, IsAntialias = true };
             using var font = new SKFont(SKTypeface.Default, 24);
-            canvas.DrawText(text, 4, 40, font, paint);
+            canvas.DrawText(text, 4, 40, SKTextAlign.Left, font, paint);
         }
 
         return new ImageParameter

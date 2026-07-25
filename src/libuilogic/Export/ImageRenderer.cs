@@ -244,7 +244,7 @@ public static class ImageRenderer
         }
 
         // Draw the already-rendered text bitmap on top of the boxes, offset by padding
-        canvas.DrawBitmap(textBitmap, padLeft, padTop);
+        canvas.DrawBitmap(textBitmap, padLeft, padTop, SKSamplingOptions.Default);
         return result;
     }
 
@@ -443,7 +443,7 @@ public static class ImageRenderer
         using var shaper = new SKShaper(font.Typeface);
         var result = shaper.Shape(text, x, y, font);
 
-        var path = new SKPath();
+        using var builder = new SKPathBuilder();
         for (var i = 0; i < result.Codepoints.Length; i++)
         {
             using var glyphPath = font.GetGlyphPath((ushort)result.Codepoints[i]);
@@ -452,10 +452,10 @@ public static class ImageRenderer
                 continue;
             }
 
-            path.AddPath(glyphPath, result.Points[i].X, result.Points[i].Y);
+            builder.AddPath(glyphPath, result.Points[i].X, result.Points[i].Y);
         }
 
-        return path;
+        return builder.Detach();
     }
 
     private static SKFont GetFont(TextSegment segment, SKFont regular, SKFont bold, SKFont italic, SKFont boldItalic)
