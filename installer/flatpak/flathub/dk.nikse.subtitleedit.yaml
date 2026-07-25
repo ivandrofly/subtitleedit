@@ -66,9 +66,11 @@ modules:
     cleanup:
       - /bin
       - /include
-      - /lib/cmake
-      - /lib/libharfbuzz-subset.so*
-      - /lib/pkgconfig/harfbuzz-subset.pc
+      # meson installs into lib64 on x86_64 and lib on some other arches, so
+      # these must glob - a plain /lib prefix silently matched nothing.
+      - /lib*/cmake
+      - /lib*/libharfbuzz-subset.so*
+      - /lib*/pkgconfig/harfbuzz-subset.pc
       - /share
     sources:
       - type: git
