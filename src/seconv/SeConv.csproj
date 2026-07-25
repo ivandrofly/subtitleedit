@@ -25,11 +25,11 @@
       publish shipped without libSkiaSharp.so / libHarfBuzzSharp.so and crashed with
       DllNotFoundException (issue #11872). Reference the Linux native assets explicitly
       (only deployed for the linux RID), pinned to the same versions as the managed
-      SkiaSharp / HarfBuzzSharp wrappers that Avalonia pulls in (3.119.4 / 8.3.1.5) to
+      SkiaSharp / HarfBuzzSharp wrappers the app resolves to (4.150.1 / 14.2.1.1) to
       avoid a native/managed ABI mismatch (cf. issues #11864, #11931).
     -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="8.3.1.5" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.150.1" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.2.1.1" />
   </ItemGroup>
 
   <ItemGroup>

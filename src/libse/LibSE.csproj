@@ -48,7 +48,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="SkiaSharp" Version="3.119.4" />
+		<PackageReference Include="SkiaSharp" Version="4.150.1" />
 		<PackageReference Include="UTF.Unknown" Version="2.6.0" />
 	</ItemGroup>
 

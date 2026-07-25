@@ -37,6 +37,12 @@ cleanup:
 modules:
   # --- libmpv dependencies ---
 
+  # Built for libmpv / libass, but it ends up in the same process as the
+  # libHarfBuzzSharp.so the app bundles, and both export the global hb_* symbols.
+  # Keep this tag in sync with the upstream HarfBuzz that HarfBuzzSharp is built from
+  # (HarfBuzzSharp 14.2.1.1 -> harfbuzz 14.2.1) so the two copies stay ABI-compatible
+  # if symbol interposition ever wins over the RTLD_DEEPBIND fix (issue #11864,
+  # src/libuilogic/HarfBuzzNativeFix.cs).
   - name: harfbuzz
     buildsystem: meson
     config-opts:
@@ -50,6 +56,12 @@ modules:
       - -Dcairo=disabled
       - -Dicu=disabled
       - -Dgraphite2=disabled
+      # New in HarfBuzz 14 and enabled by default. Nothing here draws through
+      # HarfBuzz, so keep the module feature-equivalent to the 8.3.1 it replaced
+      # rather than shipping ~11 MB of unused libraries.
+      - -Dgpu=disabled
+      - -Draster=disabled
+      - -Dvector=disabled
       - -Dc_link_args=-lstdc++
     cleanup:
       - /bin
@@ -61,8 +73,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/harfbuzz/harfbuzz.git
-        tag: 8.3.1
-        commit: 985366b8b2a4e7e07413af918612334d6764a287
+        tag: 14.2.1
+        commit: 77a832110d40b0179636f5be8f8781f8299d7e50
 
   - name: libass
     config-opts:
