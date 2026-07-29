@@ -14,13 +14,10 @@ internal sealed class TesseractOcrEngine : IOcrEngine
     public string ExecutablePath { get; }
     public string Language { get; }
 
-    private readonly string _workDir;
-
-    private TesseractOcrEngine(string executablePath, string language, string workDir)
+    private TesseractOcrEngine(string executablePath, string language)
     {
         ExecutablePath = executablePath;
         Language = language;
-        _workDir = workDir;
     }
 
     /// <summary>
@@ -49,9 +46,7 @@ internal sealed class TesseractOcrEngine : IOcrEngine
                 "Tesseract not found on PATH. Install it from https://tesseract-ocr.github.io/ " +
                 "(or `apt install tesseract-ocr` / `brew install tesseract`) and ensure the binary is on PATH.");
 
-        var workDir = Path.Combine(Path.GetTempPath(), "seconv_ocr_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(workDir);
-        return new TesseractOcrEngine(path, language, workDir);
+        return new TesseractOcrEngine(path, language);
     }
 
     /// <summary>
@@ -67,19 +62,17 @@ internal sealed class TesseractOcrEngine : IOcrEngine
         }
 
         var prepped = Preprocess(bitmap);
-        var pngPath = Path.Combine(_workDir, "in_" + Guid.NewGuid().ToString("N") + ".png");
         try
         {
-            using (var image = SKImage.FromBitmap(prepped))
-            using (var data = image.Encode(SKEncodedImageFormat.Png, 90))
-            using (var fs = File.Create(pngPath))
-            {
-                data.SaveTo(fs);
-            }
+            // Pipe the PNG to Tesseract's stdin ("stdin" pseudo file name) instead of writing
+            // a temp file per image - a full .sup OCR run used to create thousands of them.
+            using var image = SKImage.FromBitmap(prepped);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 90);
 
             var psi = new ProcessStartInfo(ExecutablePath)
             {
-                ArgumentList = { pngPath, "stdout", "-l", Language, "--psm", "6" },
+                ArgumentList = { "stdin", "stdout", "-l", Language, "--psm", "6" },
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 StandardOutputEncoding = System.Text.Encoding.UTF8,
@@ -92,6 +85,17 @@ internal sealed class TesseractOcrEngine : IOcrEngine
             // Drain stderr concurrently — Tesseract emits warnings to stderr, and reading
             // stdout to completion while stderr fills the pipe buffer would deadlock.
             var stderrTask = proc.StandardError.ReadToEndAsync();
+            try
+            {
+                using var stdin = proc.StandardInput.BaseStream;
+                data.AsStream().CopyTo(stdin);
+            }
+            catch (IOException)
+            {
+                // Tesseract exited before consuming the whole image (e.g. missing language
+                // data) - fall through, the exit code / stderr carry the real error.
+            }
+
             var stdout = proc.StandardOutput.ReadToEnd();
             proc.WaitForExit();
             if (proc.ExitCode != 0)
@@ -103,7 +107,6 @@ internal sealed class TesseractOcrEngine : IOcrEngine
         }
         finally
         {
-            try { File.Delete(pngPath); } catch { /* best-effort */ }
             prepped.Dispose();
         }
     }
@@ -124,16 +127,6 @@ internal sealed class TesseractOcrEngine : IOcrEngine
 
     public void Dispose()
     {
-        try
-        {
-            if (Directory.Exists(_workDir))
-            {
-                Directory.Delete(_workDir, recursive: true);
-            }
-        }
-        catch
-        {
-            // Ignore cleanup races.
-        }
+        // Nothing to clean up - images are piped, no temp work folder exists anymore.
     }
 }

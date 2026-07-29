@@ -67,9 +67,6 @@ public class TesseractOcr
         nbmp.MakeBlackAndWhiteForOcr();
         using var oneColorBitmap = nbmp.GetBitmap();
 
-        var tempImage = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.png");
-        var tempTextFileName = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-
         // When the tools log is on, record what Tesseract is actually fed: how much "ink" survived
         // the black/white preprocessing (0% means the text was blanked, e.g. coloured subtitles) and
         // a copy of the exact image, so blank output can be diagnosed without guessing.
@@ -90,119 +87,104 @@ public class TesseractOcr
             }
         }
 
-        try
+        // The image is piped to tesseract's stdin and the hOCR comes back on stdout
+        // ("stdin"/"stdout" pseudo file names), so a batch OCR run creates no temp files
+        // at all - the old flow wrote one .png and one .hocr to disk per image.
+        // Use -c inline variables instead of the "hocr" configfile — avoids requiring a
+        // configs/ subdirectory in the tessdata folder (user-downloaded packs don't include it).
+        var psi = new ProcessStartInfo
         {
-            await File.WriteAllBytesAsync(tempImage, oneColorBitmap.ToPngArray(), cancellationToken);
-
-            // Use -c inline variables instead of the "hocr" configfile — avoids requiring a
-            // configs/ subdirectory in the tessdata folder (user-downloaded packs don't include it).
-            var psi = new ProcessStartInfo
-            {
-                FileName = _executablePath,
-                UseShellExecute = false,
-                RedirectStandardOutput = false, // output goes to temp .hocr file, not stdout
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(tempImage);
-            psi.ArgumentList.Add(tempTextFileName);
-            psi.ArgumentList.Add("--tessdata-dir");
-            psi.ArgumentList.Add(tessDataFolder);
-            psi.ArgumentList.Add("-l");
-            psi.ArgumentList.Add(language);
-            psi.ArgumentList.Add("--psm");
-            psi.ArgumentList.Add("6");
-            psi.ArgumentList.Add("--oem");
-            psi.ArgumentList.Add(engineMode.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            psi.ArgumentList.Add("-c");
-            psi.ArgumentList.Add("tessedit_create_hocr=1");
-            psi.ArgumentList.Add("-c");
-            psi.ArgumentList.Add("tessedit_create_txt=0");
+            FileName = _executablePath,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+        };
+        psi.ArgumentList.Add("stdin");
+        psi.ArgumentList.Add("stdout");
+        psi.ArgumentList.Add("--tessdata-dir");
+        psi.ArgumentList.Add(tessDataFolder);
+        psi.ArgumentList.Add("-l");
+        psi.ArgumentList.Add(language);
+        psi.ArgumentList.Add("--psm");
+        psi.ArgumentList.Add("6");
+        psi.ArgumentList.Add("--oem");
+        psi.ArgumentList.Add(engineMode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        psi.ArgumentList.Add("-c");
+        psi.ArgumentList.Add("tessedit_create_hocr=1");
+        psi.ArgumentList.Add("-c");
+        psi.ArgumentList.Add("tessedit_create_txt=0");
 
 #pragma warning disable CA1416 // Validate platform compatibility
-            using var process = new Process { StartInfo = psi };
-            try
-            {
-                process.Start();
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                Error = $"Could not start Tesseract at \"{_executablePath}\": {ex.Message}." +
-                        (OperatingSystem.IsWindows()
-                            ? string.Empty
-                            : " Make sure Tesseract is installed (e.g. \"brew install tesseract\" on macOS, \"apt install tesseract-ocr\" on Linux).");
-                return string.Empty;
-            }
+        using var process = new Process { StartInfo = psi };
+        try
+        {
+            process.Start();
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Error = $"Could not start Tesseract at \"{_executablePath}\": {ex.Message}." +
+                    (OperatingSystem.IsWindows()
+                        ? string.Empty
+                        : " Make sure Tesseract is installed (e.g. \"brew install tesseract\" on macOS, \"apt install tesseract-ocr\" on Linux).");
+            return string.Empty;
+        }
 #pragma warning restore CA1416 // Validate platform compatibility
 
-            var stderrTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
-            try
-            {
-                await process.WaitForExitAsync(cancellationToken);
-            }
-            catch
-            {
-                process.Kill();
-                throw;
-            }
-
-            var stderr = await stderrTask;
-            if (Se.Settings.Tools.WriteToolsLog)
-            {
-                Se.WriteToolsLog($"Tesseract OCR: exit={process.ExitCode}" +
-                                 (string.IsNullOrWhiteSpace(stderr) ? string.Empty : " stderr=" + stderr.Trim()));
-            }
-
-            if (process.ExitCode != 0)
-            {
-                Error = string.IsNullOrWhiteSpace(stderr)
-                    ? $"Tesseract exited with code {process.ExitCode}."
-                    : stderr.Trim();
-                return string.Empty;
-            }
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(tempImage);
-            }
-            catch
-            {
-                // Ignore cleanup errors
-            }
-        }
+        // Start draining stdout and stderr before feeding stdin: tesseract blocked on a full
+        // output pipe buffer while we block writing input would deadlock both processes.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var stderrTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
 
         try
         {
-            var htmlPath = tempTextFileName + ".html";
-            if (File.Exists(htmlPath))
-            {
-                var result = await File.ReadAllTextAsync(htmlPath, Encoding.UTF8, cancellationToken);
-                return ParseHOcr(result);
-            }
-
-            var hocrPath = tempTextFileName + ".hocr";
-            if (File.Exists(hocrPath))
-            {
-                var result = await File.ReadAllTextAsync(hocrPath, Encoding.UTF8, cancellationToken);
-                return ParseHOcr(result);
-            }
-
-            return string.Empty;
-        }
-        finally
-        {
             try
             {
-                File.Delete(tempTextFileName + ".html");
-                File.Delete(tempTextFileName + ".hocr");
+                await process.StandardInput.BaseStream.WriteAsync(oneColorBitmap.ToPngArray(), cancellationToken);
             }
-            catch
+            catch (IOException)
             {
-                // Ignore cleanup errors
+                // tesseract exited before reading all of the image (e.g. bad language/arguments);
+                // the exit code and stderr below carry the real error.
             }
+            finally
+            {
+                try
+                {
+                    process.StandardInput.Close();
+                }
+                catch
+                {
+                    // ignore - already closed by a dying process
+                }
+            }
+
+            await process.WaitForExitAsync(cancellationToken);
         }
+        catch
+        {
+            process.Kill();
+            throw;
+        }
+
+        var stderr = await stderrTask;
+        if (Se.Settings.Tools.WriteToolsLog)
+        {
+            Se.WriteToolsLog($"Tesseract OCR: exit={process.ExitCode}" +
+                             (string.IsNullOrWhiteSpace(stderr) ? string.Empty : " stderr=" + stderr.Trim()));
+        }
+
+        if (process.ExitCode != 0)
+        {
+            Error = string.IsNullOrWhiteSpace(stderr)
+                ? $"Tesseract exited with code {process.ExitCode}."
+                : stderr.Trim();
+            return string.Empty;
+        }
+
+        return ParseHOcr(await stdoutTask);
     }
 
     // Percentage of dark "ink" pixels in the preprocessed (black-on-white) image. ~0% means the
