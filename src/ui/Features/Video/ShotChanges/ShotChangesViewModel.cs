@@ -18,7 +18,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Xml;
@@ -51,7 +51,8 @@ public partial class ShotChangesViewModel : ObservableObject, IClosingCleanup
     private readonly System.Timers.Timer _timerGenerate;
     private bool _doAbort;
     private FfmpegMediaInfo2? _mediaInfo;
-    private Lock TimeCodesLock = new Lock();
+    private Channel<double>? _timeCodesChannel;
+    private Task? _timeCodesReaderTask;
     private TimeCode? _duration;
     private double _frameRate;
     private static readonly char[] SplitChars = { ':', '.', ',' };
@@ -117,6 +118,7 @@ public partial class ShotChangesViewModel : ObservableObject, IClosingCleanup
             _ffmpegProcess.Kill(true);
 #pragma warning restore CA1416
 
+            _timeCodesChannel?.Writer.TryComplete();
             IsGenerating = false;
             _doAbort = false;
             return;
@@ -128,10 +130,23 @@ public partial class ShotChangesViewModel : ObservableObject, IClosingCleanup
         }
 
         _timerGenerate.Stop();
-        if (FfmpegLines.Count > 0)
+
+        // Complete the channel and let the reader drain any pending time codes
+        // into FfmpegLines before deciding whether to close with a result.
+        _timeCodesChannel?.Writer.TryComplete();
+        var readerTask = _timeCodesReaderTask;
+        _ = Task.Run(async () =>
         {
-            Ok();
-        }
+            if (readerTask != null)
+            {
+                await readerTask;
+            }
+
+            if (FfmpegLines.Count > 0)
+            {
+                Ok();
+            }
+        });
     }
 
     [RelayCommand]
@@ -150,6 +165,15 @@ public partial class ShotChangesViewModel : ObservableObject, IClosingCleanup
 
         ProgressValue = 0;
         ProgressText = Se.Language.General.StartingDotDotDot;
+
+        // Detected time codes flow through a channel: OutputHandler runs on the ffmpeg
+        // reader threads and must never block on the UI thread (a blocking Invoke there
+        // back-pressures the ffmpeg pipe), so it just TryWrites and the single reader
+        // below batches the UI updates.
+        var channel = Channel.CreateUnbounded<double>(new UnboundedChannelOptions { SingleReader = true });
+        _timeCodesChannel = channel;
+        _timeCodesReaderTask = ConsumeTimeCodes(channel.Reader);
+
         _ffmpegProcess = FfmpegGenerator.GetProcess(arguments, OutputHandler);
 #pragma warning disable CA1416 // Validate platform compatibility
         _ffmpegProcess.Start();
@@ -174,25 +198,47 @@ public partial class ShotChangesViewModel : ObservableObject, IClosingCleanup
             var timeCode = match.Value.Replace("pts_time:", string.Empty).Replace(",", ".").Replace("٫", ".").Replace("⠨", ".");
             if (double.TryParse(timeCode, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var seconds) && seconds > 0.2)
             {
-                lock (TimeCodesLock)
+                LastSeconds = seconds;
+                _timeCodesChannel?.Writer.TryWrite(seconds);
+            }
+        }
+    }
+
+    private Task ConsumeTimeCodes(ChannelReader<double> reader)
+    {
+        return Task.Run(async () =>
+        {
+            while (await reader.WaitToReadAsync())
+            {
+                var batch = new List<double>();
+                while (reader.TryRead(out var seconds))
                 {
-                    Dispatcher.UIThread.Invoke(() =>
+                    batch.Add(seconds);
+                }
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TimeItem? item = null;
+                    foreach (var seconds in batch)
                     {
-                        var item = new TimeItem(seconds, FfmpegLines.Count);
+                        item = new TimeItem(seconds, FfmpegLines.Count);
                         FfmpegLines.Add(item);
+                    }
+
+                    if (item != null)
+                    {
                         DataGridFfmpegLines.ScrollIntoView(item, null);
 
                         if (_duration != null)
                         {
-                            var pct = seconds / _duration.TotalSeconds * 100;
-                            ProgressValue = seconds / _duration.TotalSeconds * 100;
+                            var pct = batch[^1] / _duration.TotalSeconds * 100;
+                            ProgressValue = pct;
                             ProgressText = $"{pct:0}%";
                         }
-                    });
-                }
-                LastSeconds = seconds;
+                    }
+                });
             }
-        }
+        });
     }
 
     [RelayCommand]
