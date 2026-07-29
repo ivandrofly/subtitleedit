@@ -9,6 +9,8 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace Nikse.SubtitleEdit.Features.Ocr.Engines;
 
@@ -30,8 +32,6 @@ public class GoogleLensOcr
     {
         Error = string.Empty;
     }
-
-    private Lock _lockObject = new Lock();
 
     public void OcrBatch(List<PaddleOcrBatchInput> input, string language, IProgress<PaddleOcrBatchProgress> progress, CancellationToken cancellationToken)
     {
@@ -99,37 +99,54 @@ public class GoogleLensOcr
                     results[currentFileName] = string.Empty;
                 }
 
+                // The two DataReceived handlers fire on separate reader threads; they only
+                // enqueue, and the single consumer below runs the parsing state machine, so
+                // currentFileName/canCollectText/results/_log stay single-threaded.
+                var lines = Channel.CreateUnbounded<(bool IsError, string Line)>(
+                    new UnboundedChannelOptions { SingleReader = true });
+
                 process.OutputDataReceived += (sendingProcess, outLine) =>
                 {
-                    if (string.IsNullOrWhiteSpace(outLine.Data))
+                    if (!string.IsNullOrWhiteSpace(outLine.Data))
+                    {
+                        lines.Writer.TryWrite((false, outLine.Data));
+                    }
+                };
+
+                process.ErrorDataReceived += (sendingProcess, errorLine) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(errorLine.Data))
+                    {
+                        lines.Writer.TryWrite((true, errorLine.Data));
+                    }
+                };
+
+                void ReportCurrentResult()
+                {
+                    if (currentFileName == null)
                     {
                         return;
                     }
 
-                    _log.AppendLine(outLine.Data);
+                    var existingInput = input.FirstOrDefault(p => Path.GetFileName(p.FileName) == currentFileName);
+                    if (existingInput != null && results.ContainsKey(currentFileName))
+                    {
+                        existingInput.Text = results[currentFileName].Trim();
+                        _batchProgress?.Report(new PaddleOcrBatchProgress
+                        {
+                            Index = existingInput.Index,
+                            Text = existingInput.Text,
+                            Item = existingInput.Item,
+                        });
+                    }
+                }
 
-                    var fileMarkerMatch = Regex.Match(outLine.Data, @"- \(\d+/\d+\) Result for: (.*) -");
+                void ProcessResultLine(string data)
+                {
+                    var fileMarkerMatch = Regex.Match(data, @"- \(\d+/\d+\) Result for: (.*) -");
                     if (fileMarkerMatch.Success)
                     {
-                        if (currentFileName != null)
-                        {
-                            var existingInput = input.FirstOrDefault(p => Path.GetFileName(p.FileName) == currentFileName);
-                            if (existingInput != null && results.ContainsKey(currentFileName))
-                            {
-                                existingInput.Text = results[currentFileName].Trim();
-                                lock (_lockObject)
-                                {
-                                    var progressReport = new PaddleOcrBatchProgress
-                                    {
-                                        Index = existingInput.Index,
-                                        Text = existingInput.Text,
-                                        Item = existingInput.Item,
-                                    };
-                                    _batchProgress?.Report(progressReport);
-                                }
-                            }
-                        }
-
+                        ReportCurrentResult();
                         currentFileName = fileMarkerMatch.Groups[1].Value.Trim();
                         if (!results.ContainsKey(currentFileName))
                         {
@@ -139,7 +156,7 @@ public class GoogleLensOcr
                         return;
                     }
 
-                    if (outLine.Data.StartsWith("OCR Results:"))
+                    if (data.StartsWith("OCR Results:"))
                     {
                         canCollectText = true;
                         return;
@@ -147,36 +164,9 @@ public class GoogleLensOcr
 
                     if (canCollectText && currentFileName != null)
                     {
-                        AddLineToResult(results, currentFileName, outLine.Data);
+                        AddLineToResult(results, currentFileName, data);
                     }
-
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        try
-                        {
-                            process.CancelOutputRead();
-                            process.Kill(true); // Terminate GoogleLens process
-                            process.WaitForExit(1000);
-                        }
-                        catch (Exception ex)
-                        {
-                            Error = $"Error terminating GoogleLens: {ex.Message}";
-                            SeLogger.Error(ex, "Log: " + _log.ToString());
-                        }
-                    }
-                };
-
-                process.ErrorDataReceived += (sendingProcess, errorLine) =>
-                {
-                    if (errorLine == null || string.IsNullOrWhiteSpace(errorLine.Data))
-                    {
-                        return;
-                    }
-                    Error = errorLine.Data;
-
-                    _hasErrors = true;
-                    _log.AppendLine(errorLine.Data);
-                };
+                }
 
 #pragma warning disable CA1416 // Validate platform compatibility
                 process.Start();
@@ -185,31 +175,52 @@ public class GoogleLensOcr
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
+                var consumer = Task.Run(async () =>
+                {
+                    await foreach (var (isError, line) in lines.Reader.ReadAllAsync())
+                    {
+                        _log.AppendLine(line);
+
+                        if (isError)
+                        {
+                            Error = line;
+                            _hasErrors = true;
+                            continue;
+                        }
+
+                        ProcessResultLine(line);
+
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            try
+                            {
+                                process.CancelOutputRead();
+                                process.Kill(true); // Terminate GoogleLens process
+                                process.WaitForExit(1000);
+                            }
+                            catch (Exception ex)
+                            {
+                                Error = $"Error terminating GoogleLens: {ex.Message}";
+                                SeLogger.Error(ex, "Log: " + _log.ToString());
+                            }
+
+                            return;
+                        }
+                    }
+                });
+
+                // The sync WaitForExit overload also waits for the redirected streams to hit
+                // end-of-stream, so completing the writer here cannot drop a trailing line.
                 process.WaitForExit();
+                lines.Writer.TryComplete();
+                consumer.GetAwaiter().GetResult();
 
                 if (_hasErrors)
                 {
                     SeLogger.Error("GoogleLensError: " + _log.ToString());
                 }
 
-                if (currentFileName != null)
-                {
-                    var existingInput = input.FirstOrDefault(p => Path.GetFileName(p.FileName) == currentFileName);
-                    if (existingInput != null && results.ContainsKey(currentFileName))
-                    {
-                        existingInput.Text = results[currentFileName].Trim();
-                        lock (_lockObject)
-                        {
-                            var progressReport = new PaddleOcrBatchProgress
-                            {
-                                Index = existingInput.Index,
-                                Text = existingInput.Text,
-                                Item = existingInput.Item,
-                            };
-                            _batchProgress?.Report(progressReport);
-                        }
-                    }
-                }
+                ReportCurrentResult();
             }
         }
         catch (Exception ex)
