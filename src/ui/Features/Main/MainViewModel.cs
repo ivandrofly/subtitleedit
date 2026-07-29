@@ -9057,13 +9057,12 @@ public partial class MainViewModel :
                     {
                         if (FfmpegHelper.IsFfmpegInstalled())
                         {
-                            var tempWaveFileName = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.wav");
-                            var process = WaveFileExtractor.GetCommandLineProcess(_videoFileName, _audioTrack?.FfIndex ?? -1, tempWaveFileName,
-                                Configuration.Settings.General.VlcWaveTranscodeSettings, out _);
+                            var videoFileName = _videoFileName;
+                            var trackNumber = _audioTrack?.FfIndex ?? -1;
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                             Task.Run(async () =>
                             {
-                                await ExtractWaveformAndSpectrogramAndShotChanges(process, tempWaveFileName, peakWaveFileName, spectrogramFileName, _videoFileName);
+                                await ExtractWaveformAndSpectrogramAndShotChanges(videoFileName, trackNumber, peakWaveFileName, spectrogramFileName);
                             });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                         }
@@ -18484,11 +18483,8 @@ public partial class MainViewModel :
             AudioVisualizer.ShowClickToGenerateHint = false;
         }
 
-        var tempWaveFileName = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.wav");
-        var process = WaveFileExtractor.GetCommandLineProcess(videoFileName, trackNumber, tempWaveFileName,
-            Configuration.Settings.General.VlcWaveTranscodeSettings, out _);
 #pragma warning disable CS4014 // fire-and-forget; extraction posts results back to the UI thread
-        Task.Run(async () => { await ExtractWaveformAndSpectrogramAndShotChanges(process, tempWaveFileName, peakWaveFileName, spectrogramFileName, videoFileName); });
+        Task.Run(async () => { await ExtractWaveformAndSpectrogramAndShotChanges(videoFileName, trackNumber, peakWaveFileName, spectrogramFileName); });
 #pragma warning restore CS4014
     }
 
@@ -18705,27 +18701,37 @@ public partial class MainViewModel :
         }
     }
 
+    // Streams raw PCM from ffmpeg's stdout pipe and computes peaks/spectrogram data in the
+    // same pass (PipedWaveformExtractor) - no temporary WAV file, and peak generation
+    // overlaps the transcode instead of waiting for it.
     private async Task ExtractWaveformAndSpectrogramAndShotChanges(
-        Process process,
-        string tempWaveFileName,
+        string videoFileName,
+        int trackNumber,
         string peakWaveFileName,
-        string spectrogramFolderName,
-        string videoFileName)
+        string spectrogramFileName)
     {
         IsWaveformGenerating = true;
         WaveformGeneratingText = Se.Language.Main.ExtractingWaveInfo;
 
         try
         {
-            process.Start();
-
             _videoOpenTokenSource = new CancellationTokenSource();
-            while (!process.HasExited)
+            var token = _videoOpenTokenSource.Token;
+
+            var result = await Task.Run(() => PipedWaveformExtractor.Extract(
+                videoFileName,
+                trackNumber,
+                peakWaveFileName,
+                Se.Settings.Waveform.GenerateSpectrogram ? spectrogramFileName : null,
+                token,
+                onSpectrogramStart: () => WaveformGeneratingText = Se.Language.Main.GeneratingSpectrogramDotDotDot));
+
+            if (token.IsCancellationRequested)
             {
-                await Task.Delay(100, _videoOpenTokenSource.Token);
+                return;
             }
 
-            if (process.ExitCode != 0)
+            if (result == null)
             {
                 ShowStatus(Se.Language.Main.FailedToExtractWaveInfo);
                 Dispatcher.UIThread.Post(async () =>
@@ -18735,58 +18741,36 @@ public partial class MainViewModel :
                 return;
             }
 
-            if (_videoOpenTokenSource.IsCancellationRequested)
+            if (result.Spectrogram != null)
             {
-                DeleteTempFile(tempWaveFileName);
-                return;
+                AudioVisualizer?.SetSpectrogram(result.Spectrogram);
             }
 
-            if (File.Exists(tempWaveFileName))
+            Dispatcher.UIThread.Post(() =>
             {
-                WaveformGeneratingText = Se.Language.Main.GeneratingWaveformDotDotDot;
-                using var waveFile = new WavePeakGenerator2(tempWaveFileName);
-                var wavePeaks = waveFile.GeneratePeaks(0, peakWaveFileName);
+                ShowWaveformOnlyWaveform = false;
+                ShowWaveformOnlySpectrogram = false;
+                ShowWaveformWaveformAndSpectrogram = false;
 
-                if (Se.Settings.Waveform.GenerateSpectrogram)
+                if (AudioVisualizer != null)
                 {
-                    WaveformGeneratingText = Se.Language.Main.GeneratingSpectrogramDotDotDot;
-                    var spectrogram = waveFile.GenerateSpectrogram(0, spectrogramFolderName, _videoOpenTokenSource.Token);
-                    AudioVisualizer?.SetSpectrogram(spectrogram);
-                }
-
-                Dispatcher.UIThread.Post(() =>
-                {
-                    ShowWaveformOnlyWaveform = false;
-                    ShowWaveformOnlySpectrogram = false;
-                    ShowWaveformWaveformAndSpectrogram = false;
-
-                    if (AudioVisualizer != null)
+                    AudioVisualizer.WavePeaks = result.Peaks;
+                    if (IsSmpteTimingEnabled)
                     {
-                        AudioVisualizer.WavePeaks = wavePeaks;
-                        if (IsSmpteTimingEnabled)
-                        {
-                            AudioVisualizer.UseSmpteDropFrameTime();
-                        }
-
-                        InitializeWaveformDisplayMode();
-
-                        // Same rationale as the cached-peaks path in LoadWaveformAndSpectrogram:
-                        // by the time FFmpeg has produced the peak data, the video position
-                        // may already be set (session-restore / user click). Bring the
-                        // waveform window in line.
-                        CenterAudioVisualizerOnCurrentVideoPosition();
+                        AudioVisualizer.UseSmpteDropFrameTime();
                     }
 
-                    _updateAudioVisualizer = true;
-                }, DispatcherPriority.Background);
+                    InitializeWaveformDisplayMode();
 
-
-                if (_videoOpenTokenSource.IsCancellationRequested)
-                {
-                    DeleteTempFile(tempWaveFileName);
-                    return;
+                    // Same rationale as the cached-peaks path in LoadWaveformAndSpectrogram:
+                    // by the time FFmpeg has produced the peak data, the video position
+                    // may already be set (session-restore / user click). Bring the
+                    // waveform window in line.
+                    CenterAudioVisualizerOnCurrentVideoPosition();
                 }
-            }
+
+                _updateAudioVisualizer = true;
+            }, DispatcherPriority.Background);
 
             ExtractShotChanges(videoFileName, _audioTrack?.FfIndex ?? -1);
         }
@@ -18794,7 +18778,6 @@ public partial class MainViewModel :
         {
             IsWaveformGenerating = false;
             WaveformGeneratingText = string.Empty;
-            DeleteTempFile(tempWaveFileName);
             lock (_waveformsBeingGeneratedLock)
             {
                 _waveformsBeingGenerated.Remove(peakWaveFileName);
@@ -18871,20 +18854,6 @@ public partial class MainViewModel :
         }
     }
 
-    private static void DeleteTempFile(string tempWaveFileName)
-    {
-        try
-        {
-            if (File.Exists(tempWaveFileName))
-            {
-                File.Delete(tempWaveFileName);
-            }
-        }
-        catch
-        {
-            // ignore
-        }
-    }
 
     private void VideoCloseFile()
     {

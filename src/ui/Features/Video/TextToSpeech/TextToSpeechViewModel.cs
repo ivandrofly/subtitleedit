@@ -1883,50 +1883,24 @@ public partial class TextToSpeechViewModel : ObservableObject
             return;
         }
 
-        var tempWaveFileName = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.wav");
         try
         {
             var peakWaveFileName = WavePeakGenerator2.GetPeakWaveFileName(videoFileName);
 
-            using (var process = WaveFileExtractor.GetCommandLineProcess(
-                videoFileName,
-                -1,
-                tempWaveFileName,
-                Configuration.Settings.General.VlcWaveTranscodeSettings,
-                out _))
-            {
-                process.Start();
-                await process.WaitForExitAsync();
-                if (process.ExitCode != 0)
-                {
-                    SeLogger.Error($"ffmpeg exited with code {process.ExitCode} extracting wave for TTS review: '{videoFileName}'");
-                    return;
-                }
-            }
-
-            if (!File.Exists(tempWaveFileName))
+            // Streams raw PCM from ffmpeg's stdout - no temp WAV file (PipedWaveformExtractor
+            // logs ffmpeg failures itself and returns null).
+            var result = await Task.Run(() => PipedWaveformExtractor.Extract(
+                videoFileName, -1, peakWaveFileName, null, CancellationToken.None));
+            if (result == null)
             {
                 return;
             }
 
-            WavePeakData2? peaks;
-            using (var waveFile = new WavePeakGenerator2(tempWaveFileName))
-            {
-                peaks = waveFile.GeneratePeaks(0, peakWaveFileName);
-            }
-
-            if (peaks != null)
-            {
-                await Dispatcher.UIThread.InvokeAsync(() => reviewVm.WavePeakData = peaks);
-            }
+            await Dispatcher.UIThread.InvokeAsync(() => reviewVm.WavePeakData = result.Peaks);
         }
         catch (Exception ex)
         {
             SeLogger.Error(ex, $"Background wave-peak generation failed for '{videoFileName}'");
-        }
-        finally
-        {
-            try { File.Delete(tempWaveFileName); } catch { /* best effort */ }
         }
     }
 
