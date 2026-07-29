@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace Nikse.SubtitleEdit.Logic.Download;
@@ -233,31 +234,47 @@ public class YtDlpDownloadService : IYtDlpDownloadService
         };
         foreach (var a in args) process.StartInfo.ArgumentList.Add(a);
 
-        var stderrBuffer = new System.Text.StringBuilder();
+        // stdout and stderr arrive on separate reader threads; merging them into one
+        // channel keeps progress reports ordered (two threads racing Report() could
+        // overwrite a newer percentage with a stale one) and the log single-threaded.
+        var lines = Channel.CreateUnbounded<(bool IsError, string Line)>(
+            new UnboundedChannelOptions { SingleReader = true });
 
         process.OutputDataReceived += (_, e) =>
         {
-            if (e.Data is null)
+            if (e.Data is not null)
             {
-                return;
+                lines.Writer.TryWrite((false, e.Data));
             }
-
-            ReportProgressFromLine(e.Data, progress);
         };
 
         process.ErrorDataReceived += (_, e) =>
         {
-            if (e.Data is null)
+            if (e.Data is not null)
             {
-                return;
+                lines.Writer.TryWrite((true, e.Data));
+            }
+        };
+
+        var consumer = Task.Run(async () =>
+        {
+            var stderr = new System.Text.StringBuilder();
+            await foreach (var (isError, line) in lines.Reader.ReadAllAsync())
+            {
+                if (isError)
+                {
+                    stderr.AppendLine(line);
+                }
+
+                ReportProgressFromLine(line, progress);
             }
 
-            stderrBuffer.AppendLine(e.Data);
-            ReportProgressFromLine(e.Data, progress);
-        };
+            return stderr;
+        });
 
         if (!process.Start())
         {
+            lines.Writer.TryComplete();
             throw new InvalidOperationException("Failed to start yt-dlp");
         }
 
@@ -271,8 +288,15 @@ public class YtDlpDownloadService : IYtDlpDownloadService
         catch (OperationCanceledException)
         {
             TryKillProcess(process);
+            lines.Writer.TryComplete();
             throw;
         }
+
+        // The synchronous overload blocks until the redirected output handlers have
+        // seen end-of-stream, so no line can arrive after the writer is completed.
+        process.WaitForExit();
+        lines.Writer.TryComplete();
+        var stderrBuffer = await consumer;
 
         if (process.ExitCode != 0)
         {
