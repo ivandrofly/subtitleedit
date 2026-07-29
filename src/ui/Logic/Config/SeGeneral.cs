@@ -64,6 +64,11 @@ public class SeGeneral
     public bool PromptBeforeDelete { get; set; }
     public bool LockTimeCodes { get; set; }
     public bool RememberPositionAndSize { get; set; }
+
+    /// <summary>When true, launching Subtitle Edit again forwards the file arguments to the
+    /// already-running instance over a named pipe instead of starting a second process.</summary>
+    public bool SingleInstance { get; set; }
+
     public bool UndockVideoControls { get; set; }
     public List<SeWindowPosition> WindowPositions { get; set; } = new List<SeWindowPosition>();
     public bool AutoSave { get; set; }

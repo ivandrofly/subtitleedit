@@ -114,6 +114,7 @@ public class LanguageSettings
     public string TimeCodeUpDownStepMs { get; set; }
     public string PromptBeforeDelete { get; set; }
     public string RememberPositionAndSize { get; set; }
+    public string SingleInstance { get; set; }
     public string OpenLastFileOnStart { get; set; }
     public string AutoSave { get; set; }
     public string AutoBackupOn { get; set; }
@@ -446,6 +447,7 @@ public class LanguageSettings
         TimeCodeUpDownStepMs = "Time up/down increment (ms)";
         PromptBeforeDelete = "Prompt before delete";
         RememberPositionAndSize = "Remember window position and size";
+        SingleInstance = "Only allow one instance (open files in the running instance)";
         OpenLastFileOnStart = "Open last recent file on start";
         AutoSave = "Auto-save (save the open file while editing)";
         AutoBackupOn = "Auto-backup";

@@ -73,6 +73,18 @@ namespace Nikse.SubtitleEdit
                 // Load settings
                 Se.LoadSettings();
 
+                // Optional single-instance mode: hand this launch's files over to an
+                // already-running instance via a named pipe and exit before any UI work.
+                // The standalone Batch Convert window is excluded - it is its own tool.
+                if (Se.Settings.General.SingleInstance && !HasBatchConvertUiArg(args))
+                {
+                    var (subtitleArg, videoArg) = GetStartupFileArgs(args);
+                    if (SingleInstanceService.TryForwardToRunningInstance(subtitleArg, videoArg))
+                    {
+                        return;
+                    }
+                }
+
                 // Must precede the format warm-up below: the CHK format's constructor resolves
                 // code page 850, which throws NotSupportedException without this provider.
                 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -208,6 +220,11 @@ namespace Nikse.SubtitleEdit
                     // Window creation (content, scale, macOS menu bar, close-to-exit hook) lives
                     // in MainWindowFactory, shared with File > New window's extra editor windows.
                     SetupMainWindow(lifetime);
+
+                    if (Se.Settings.General.SingleInstance)
+                    {
+                        StartSingleInstanceServer(lifetime);
+                    }
                 }
 
 #if DEBUG
@@ -387,6 +404,23 @@ namespace Nikse.SubtitleEdit
         // with existing user scripts (see discussion #11380).
         private static void ParseStartupArgs(string[] args)
         {
+            var (subtitle, video) = GetStartupFileArgs(args);
+
+            if (subtitle != null)
+            {
+                PendingFileToOpen = subtitle;
+                FileOpenedViaActivation = true;
+            }
+
+            if (video != null)
+            {
+                PendingVideoToOpen = video;
+                FileOpenedViaActivation = true;
+            }
+        }
+
+        private static (string? subtitle, string? video) GetStartupFileArgs(string[] args)
+        {
             string? subtitle = null;
             string? video = null;
 
@@ -411,17 +445,42 @@ namespace Nikse.SubtitleEdit
                 }
             }
 
-            if (subtitle != null)
+            if (string.IsNullOrEmpty(video) || !System.IO.File.Exists(video))
             {
-                PendingFileToOpen = subtitle;
-                FileOpenedViaActivation = true;
+                video = null;
             }
 
-            if (!string.IsNullOrEmpty(video) && System.IO.File.Exists(video))
+            return (subtitle, video);
+        }
+
+        // Listens for launches forwarded by TryForwardToRunningInstance: brings the (primary)
+        // main window to the front and opens the forwarded subtitle/video in it.
+        private static void StartSingleInstanceServer(ClassicDesktopStyleApplicationLifetime lifetime)
+        {
+            SingleInstanceService.StartServer((subtitleFileName, videoFileName) =>
             {
-                PendingVideoToOpen = video;
-                FileOpenedViaActivation = true;
-            }
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var window = lifetime.MainWindow;
+                    if (window == null)
+                    {
+                        return;
+                    }
+
+                    window.Show();
+                    if (window.WindowState == WindowState.Minimized)
+                    {
+                        window.WindowState = WindowState.Normal;
+                    }
+
+                    window.Activate();
+
+                    if (UiTheme.GetUnscaledContent(window) is MainView mainView)
+                    {
+                        mainView.OpenFromSecondInstance(subtitleFileName, videoFileName);
+                    }
+                });
+            });
         }
 
         private static bool HasBatchConvertUiArg(string[] args)

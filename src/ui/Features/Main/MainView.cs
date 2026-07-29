@@ -136,4 +136,31 @@ public class MainView : ViewBase
             await _vm.SubtitleOpen(fileName);
         });
     }
+
+    /// <summary>
+    /// Opens the subtitle/video forwarded from a second launch in single-instance mode
+    /// (see <see cref="Logic.SingleInstanceService"/>). Mirrors the CLI startup behavior:
+    /// an explicit video suppresses SubtitleOpen's video auto-guessing.
+    /// </summary>
+    internal void OpenFromSecondInstance(string? subtitleFileName, string? videoFileName)
+    {
+        if (_vm == null)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(async () =>
+        {
+            var hasVideo = !string.IsNullOrEmpty(videoFileName) && System.IO.File.Exists(videoFileName);
+            if (!string.IsNullOrEmpty(subtitleFileName) && System.IO.File.Exists(subtitleFileName))
+            {
+                await _vm.SubtitleOpen(subtitleFileName, skipLoadVideo: hasVideo);
+            }
+
+            if (hasVideo)
+            {
+                await _vm.OpenVideoFromExternalRequest(videoFileName!);
+            }
+        });
+    }
 }

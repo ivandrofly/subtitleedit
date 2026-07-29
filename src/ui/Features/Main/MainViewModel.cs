@@ -18313,6 +18313,15 @@ public partial class MainViewModel :
                && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
     }
 
+    /// <summary>
+    /// Opens a video on behalf of an out-of-process request (single-instance forwarding);
+    /// thin internal wrapper so <see cref="VideoOpenFile"/> can stay private.
+    /// </summary>
+    internal async Task OpenVideoFromExternalRequest(string videoFileName)
+    {
+        await VideoOpenFile(videoFileName);
+    }
+
     private async Task VideoOpenFile(string videoFileName, int desiredAudioTrackId = -1) // OpenVideoFile
     {
         var vp = GetVideoPlayerControl();
