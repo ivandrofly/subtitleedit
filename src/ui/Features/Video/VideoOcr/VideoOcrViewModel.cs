@@ -24,6 +24,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Nikse.SubtitleEdit.UiLogic.LlamaCpp;
 
@@ -83,8 +84,7 @@ public partial class VideoOcrViewModel : ObservableObject
     private Process? _ffmpegProcess;
     private long _extractedFrames;
     private readonly DispatcherTimer _previewTimer;
-    private bool _previewLoading;
-    private bool _previewLoadQueued;
+    private readonly Channel<double> _previewRequests;
 
     private static readonly Regex FrameFinderRegex = new(@"[Ff]rame=\s*\d+", RegexOptions.Compiled);
 
@@ -121,6 +121,16 @@ public partial class VideoOcrViewModel : ObservableObject
             _previewTimer.Stop();
             LoadPreview();
         };
+
+        // Capacity 1 + DropOldest: while a screenshot is being extracted, newer
+        // requests overwrite each other in the single slot, so the worker always
+        // loads the latest position and never runs two ffmpeg extractions at once.
+        _previewRequests = Channel.CreateBounded<double>(new BoundedChannelOptions(1)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = true,
+        });
+        Task.Run(PreviewWorker);
 
         LoadSettings();
     }
@@ -360,16 +370,12 @@ public partial class VideoOcrViewModel : ObservableObject
             return;
         }
 
-        if (_previewLoading)
-        {
-            _previewLoadQueued = true; // load again when the current load finishes
-            return;
-        }
+        _previewRequests.Writer.TryWrite(PreviewPositionSeconds);
+    }
 
-        _previewLoading = true;
-        var seconds = PreviewPositionSeconds;
-
-        Task.Run(() =>
+    private async Task PreviewWorker()
+    {
+        await foreach (var seconds in _previewRequests.Reader.ReadAllAsync())
         {
             try
             {
@@ -399,16 +405,7 @@ public partial class VideoOcrViewModel : ObservableObject
             {
                 Se.LogError(exception, "Video OCR: could not load preview frame");
             }
-            finally
-            {
-                _previewLoading = false;
-                if (_previewLoadQueued)
-                {
-                    _previewLoadQueued = false;
-                    Dispatcher.UIThread.Post(LoadPreview);
-                }
-            }
-        });
+        }
     }
 
     [RelayCommand]
@@ -1113,6 +1110,7 @@ public partial class VideoOcrViewModel : ObservableObject
     internal void OnClosing()
     {
         _previewTimer.Stop();
+        _previewRequests.Writer.TryComplete();
         _cancellationTokenSource.Cancel();
 
         try
