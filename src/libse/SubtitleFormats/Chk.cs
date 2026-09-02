@@ -189,7 +189,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     text = _codePage.GetString(buffer, start, end - start);
                 }
             }
-            if (text.Length > 4 && text[0] == 0x1f && text[1] == 'R' && text[4] == '.' && CharUtils.IsDigit(text[2]) && CharUtils.IsDigit(text[3]))
+            if (text.Length > 4 && text[0] == 0x1f && text[1] == 'R' && text[4] == '.' && CharUtils.IsAsciiDigit(text[2]) && CharUtils.IsAsciiDigit(text[3]))
             {
                 text = text.Remove(0, 5);
             }
@@ -249,7 +249,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     }
 
                     sb.Append("<font color=\"Red\">");
-                    post = "<font>";
+                    post = "</font>";
                     i += 2;
                 }
                 else if (text[i] == 01 && i < text.Length - 4 && text[i + 1] == 06)
@@ -260,7 +260,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     }
 
                     sb.Append("<font color=\"Cyan\">");
-                    post = "<font>";
+                    post = "</font>";
                     i++;
                 }
                 else if (text[i] == 2)
@@ -271,7 +271,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     }
 
                     sb.Append("<font color=\"Green\">");
-                    post = "<font>";
+                    post = "</font>";
                 }
                 else if (text[i] == 3)
                 {
@@ -281,7 +281,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     }
 
                     sb.Append("<font color=\"Yellow\">");
-                    post = "<font>";
+                    post = "</font>";
                 }
                 else if (text[i] == 6)
                 {
@@ -291,7 +291,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     }
 
                     sb.Append("<font color=\"Cyan\">");
-                    post = "<font>";
+                    post = "</font>";
                 }
                 else if (text[i] == 7)
                 {
@@ -301,7 +301,7 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
                     }
 
                     sb.Append("<font color=\"Red\">");
-                    post = "<font>";
+                    post = "</font>";
                 }
                 else
                 {

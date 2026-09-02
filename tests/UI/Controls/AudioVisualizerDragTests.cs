@@ -28,8 +28,24 @@ namespace UITests.Controls;
 /// as a clipped overlay instead. The fancy style bakes selection into per-column colors, so it
 /// still rebuilds.
 /// </summary>
-public class AudioVisualizerDragTests
+public class AudioVisualizerDragTests : IDisposable
 {
+    // A window left open outlives the test: it keeps the application-wide activation and focused
+    // element, so a later test's click or key press is delivered to it instead. The tests close
+    // their window on the last line, which leaks one whenever an assertion above it fails - and one
+    // stranded window is enough to take the rest of the class down with it.
+    private readonly List<Window> _windows = new();
+
+    public void Dispose()
+    {
+        foreach (var window in _windows)
+        {
+            window.Close();
+        }
+
+        _windows.Clear();
+    }
+
     private const int SampleRate = 126; // Se.Settings.Waveform.WaveformMinimumSampleRate default
     private const double WidthPx = 800;
     private const double HeightPx = 200;
@@ -52,7 +68,7 @@ public class AudioVisualizerDragTests
         EndTime = TimeSpan.FromSeconds(endSeconds),
     };
 
-    private static (Window Window, AudioVisualizer Av, List<SubtitleLineViewModel> Lines) Open(params SubtitleLineViewModel[] lines)
+    private (Window Window, AudioVisualizer Av, List<SubtitleLineViewModel> Lines) Open(params SubtitleLineViewModel[] lines)
     {
         var av = new AudioVisualizer
         {
@@ -70,6 +86,7 @@ public class AudioVisualizerDragTests
             Height = HeightPx,
             Content = av,
         };
+        _windows.Add(window);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();
@@ -141,6 +158,59 @@ public class AudioVisualizerDragTests
         Assert.Equal(2, line.Duration.TotalSeconds, 2); // duration preserved by a whole-line move
 
         window.MouseUp(new Point(303, 100), MouseButton.Left, RawInputModifiers.None);
+        window.Close();
+    }
+
+    // #14000: hosts (the TTS review window) select the grabbed line on press, before the drag
+    // mutates it. The event must name the line under the pointer, fire for both a middle grab
+    // and an edge grab, and stay silent for a press on empty waveform (new-selection drag) and
+    // when time codes are locked. The args carry a copy of the line (ParagraphEventArgs clones),
+    // so identity is checked by Id, as hosts must.
+    [AvaloniaFact]
+    public void OnDragStarted_FiresWithGrabbedLine_ForMoveAndResize()
+    {
+        var first = Line(1, 3);
+        var second = Line(5, 7);
+        var (window, av, _) = Open(first, second);
+        var raised = new List<SubtitleLineViewModel>();
+        av.OnDragStarted += (_, e) => raised.Add(e.Paragraph);
+
+        // Middle of the second (unselected) line: x = 6 s * 126 = 756.
+        window.MouseDown(new Point(756, 100), MouseButton.Left, RawInputModifiers.None);
+        window.MouseUp(new Point(756, 100), MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(raised);
+        Assert.Equal(second.Id, raised[0].Id);
+
+        // Right edge of the first line: x = 3 s * 126 = 378.
+        window.MouseDown(new Point(378, 100), MouseButton.Left, RawInputModifiers.None);
+        window.MouseUp(new Point(378, 100), MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, raised.Count);
+        Assert.Equal(first.Id, raised[1].Id);
+
+        // Empty waveform (x = 4 s) starts a new-selection drag, not a line drag.
+        window.MouseDown(new Point(504, 100), MouseButton.Left, RawInputModifiers.None);
+        window.MouseUp(new Point(504, 100), MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, raised.Count);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void OnDragStarted_Silent_WhenReadOnly()
+    {
+        var (window, av, _) = Open(Line(1, 3));
+        av.IsReadOnly = true;
+        var raised = 0;
+        av.OnDragStarted += (_, _) => raised++;
+
+        window.MouseDown(new Point(252, 100), MouseButton.Left, RawInputModifiers.None);
+        window.MouseUp(new Point(252, 100), MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(0, raised);
         window.Close();
     }
 
@@ -240,6 +310,32 @@ public class AudioVisualizerDragTests
         Assert.False(av.IsEditingWithPointer);
 
         window.Close();
+    }
+
+    // #14000: the generated-audio length bar. The provider is consulted once per drawn
+    // paragraph with the very instance the control draws (hosts key on it), and a render with
+    // a provider that overruns the cue, fits the cue, or returns 0 must not throw.
+    [AvaloniaFact]
+    public void ParagraphAudioLengthProvider_IsAskedPerDrawnParagraph()
+    {
+        var av = MakeMeasuredVisualizer(WaveformDrawStyle.Classic, out var line);
+        var asked = new List<SubtitleLineViewModel>();
+        var lengths = new[] { 5.0, 1.0, 0.0 };
+        foreach (var length in lengths)
+        {
+            asked.Clear();
+            av.ParagraphAudioLengthProvider = p =>
+            {
+                asked.Add(p);
+                return length;
+            };
+            RenderFrame(av);
+            Assert.Single(asked);
+            Assert.Same(line, asked[0]);
+        }
+
+        av.ParagraphAudioLengthProvider = null;
+        RenderFrame(av);
     }
 
     private static Geometry FirstCachedWaveformGeometry(AudioVisualizer av)

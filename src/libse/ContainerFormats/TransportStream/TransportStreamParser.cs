@@ -113,45 +113,50 @@ namespace Nikse.SubtitleEdit.Core.ContainerFormats.TransportStream
 
                 if (packetBuffer[0] == Packet.SynchronizationByte)
                 {
-                    var packet = new Packet(packetBuffer);
-                    if (packet.IsNullPacket)
+                    // Constructing a Packet always copies the payload into a fresh byte[]. Once
+                    // firstVideoMs is known, video/audio content packets - the vast majority of a
+                    // real file - are only ever tested against IsPrivateStream1 and discarded, so
+                    // peek the raw buffer for that marker first and skip the allocation entirely
+                    // for everything that is neither a null packet nor a subtitle one. Before
+                    // firstVideoMs is known, every packet must still be fully materialized to
+                    // read the PES timestamp bytes, exactly as before.
+                    var packetId = Packet.PeekPacketId(packetBuffer);
+                    if (packetId == Packet.NullPacketId)
                     {
                         NumberOfNullPackets++;
                     }
-
-                    else if (!firstVideoMs.HasValue && packet.IsVideoStream)
+                    else if (!firstVideoMs.HasValue)
                     {
-                        if (packet.Payload != null && packet.Payload.Length > 10)
+                        var packet = new Packet(packetBuffer);
+                        if (packet.IsVideoStream)
                         {
-                            int presentationTimestampDecodeTimestampFlags = packet.Payload[7] >> 6;
-                            if (presentationTimestampDecodeTimestampFlags == 0b00000010 ||
-                                presentationTimestampDecodeTimestampFlags == 0b00000011)
+                            if (packet.Payload != null && packet.Payload.Length > 10)
                             {
-                                firstVideoMs = (ulong)packet.Payload[9 + 4] >> 1;
-                                firstVideoMs += (ulong)packet.Payload[9 + 3] << 7;
-                                firstVideoMs += (ulong)(packet.Payload[9 + 2] & 0b11111110) << 14;
-                                firstVideoMs += (ulong)packet.Payload[9 + 1] << 22;
-                                firstVideoMs += (ulong)(packet.Payload[9 + 0] & 0b00001110) << 29;
-                                firstVideoMs = firstVideoMs / 90;
+                                int presentationTimestampDecodeTimestampFlags = packet.Payload[7] >> 6;
+                                if (presentationTimestampDecodeTimestampFlags == 0b00000010 ||
+                                    presentationTimestampDecodeTimestampFlags == 0b00000011)
+                                {
+                                    firstVideoMs = (ulong)packet.Payload[9 + 4] >> 1;
+                                    firstVideoMs += (ulong)packet.Payload[9 + 3] << 7;
+                                    firstVideoMs += (ulong)(packet.Payload[9 + 2] & 0b11111110) << 14;
+                                    firstVideoMs += (ulong)packet.Payload[9 + 1] << 22;
+                                    firstVideoMs += (ulong)(packet.Payload[9 + 0] & 0b00001110) << 29;
+                                    firstVideoMs = firstVideoMs / 90;
+                                }
                             }
                         }
+                        else if (packet.IsPrivateStream1 || _subtitlePacketIdsLookup.Contains(packet.PacketId))
+                        {
+                            AddSubtitlePacket(packet, teletextPages, teletextPesList, ref firstMs);
+                        }
                     }
-
-                    else if (packet.IsPrivateStream1 || _subtitlePacketIdsLookup.Contains(packet.PacketId))
+                    else if (_subtitlePacketIdsLookup.Contains(packetId) || Packet.PeekIsPrivateStream1(packetBuffer))
                     {
-                        TotalNumberOfPrivateStream1++;
-
-                        if (_subtitlePacketIdsLookup.Add(packet.PacketId))
+                        var packet = new Packet(packetBuffer);
+                        if (packet.IsPrivateStream1 || _subtitlePacketIdsLookup.Contains(packet.PacketId))
                         {
-                            SubtitlePacketIds.Add(packet.PacketId);
+                            AddSubtitlePacket(packet, teletextPages, teletextPesList, ref firstMs);
                         }
-
-                        if (packet.PayloadUnitStartIndicator)
-                        {
-                            firstMs = ProcessPackages(packet.PacketId, teletextPages, teletextPesList, firstMs);
-                            SubtitlePackets.RemoveAll(p => p.PacketId == packet.PacketId);
-                        }
-                        SubtitlePackets.Add(packet);
                     }
                     TotalNumberOfPackets++;
                     position += packetLength;
@@ -517,6 +522,25 @@ namespace Nikse.SubtitleEdit.Core.ContainerFormats.TransportStream
             }
         }
 
+        /// <summary>Shared by both branches of the main packet loop that keep a subtitle packet.</summary>
+        private void AddSubtitlePacket(Packet packet, Dictionary<int, List<int>> teletextPages, Dictionary<int, List<DvbSubPes>> teletextPesList, ref ulong? firstMs)
+        {
+            TotalNumberOfPrivateStream1++;
+
+            if (_subtitlePacketIdsLookup.Add(packet.PacketId))
+            {
+                SubtitlePacketIds.Add(packet.PacketId);
+            }
+
+            if (packet.PayloadUnitStartIndicator)
+            {
+                firstMs = ProcessPackages(packet.PacketId, teletextPages, teletextPesList, firstMs);
+                SubtitlePackets.RemoveAll(p => p.PacketId == packet.PacketId);
+            }
+
+            SubtitlePackets.Add(packet);
+        }
+
         private ulong? ProcessPackages(int packetId, Dictionary<int, List<int>> teletextPages, Dictionary<int, List<DvbSubPes>> teletextPesList, ulong? firstVideoMs)
         {
             var list = MakeSubtitlePesPackets(packetId, SubtitlePackets);
@@ -812,7 +836,10 @@ namespace Nikse.SubtitleEdit.Core.ContainerFormats.TransportStream
                     sub.StartMilliseconds = (ulong)seconds * 1000UL;
                     if (pes.PageCompositions.Count > 0)
                     {
-                        seconds += pes.PageCompositions[0].PageTimeOut;
+                        // Only compute the end here - the shared clock is advanced once per PES by
+                        // the block after this loop body. Doing it in both places double-counted
+                        // the page time-out for every subtitle-bearing display set, so the start
+                        // times drifted further and further ahead over the file.
                         sub.EndMilliseconds = sub.StartMilliseconds + (ulong)pes.PageCompositions[0].PageTimeOut * 1000UL;
                     }
                     else

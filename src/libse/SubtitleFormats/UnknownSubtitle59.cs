@@ -29,7 +29,9 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
             foreach (var p in subtitle.Paragraphs)
             {
                 var lines = HtmlUtil.RemoveHtmlTags(p.Text).SplitToLines();
-                sb.AppendLine(EncodeTimeCode(p.StartTime) + "\t" + lines[0].Trim());
+                // the end time is part of the format (see the header comment and RegexTimeCodes);
+                // without it every cue reloaded with EndTime 0
+                sb.AppendLine(EncodeTimeCode(p.StartTime) + "\t" + lines[0].Trim() + "\t" + EncodeTimeCode(p.EndTime));
                 for (int i = 1; i < lines.Count; i++)
                 {
                     sb.AppendLine("\t" + lines[i].Trim());
@@ -41,8 +43,9 @@ namespace Nikse.SubtitleEdit.Core.SubtitleFormats
 
         private static string EncodeTimeCode(TimeCode timeCode)
         {
-            int seconds = (int)Math.Round(timeCode.Seconds + timeCode.Milliseconds / 1000.0);
-            return $"{timeCode.Hours:00}:{timeCode.Minutes:00}:{seconds:00}";
+            // round to whole seconds on the total so 59.6s carries into the minute instead of writing ":60"
+            var rounded = new TimeCode(Math.Round(timeCode.TotalMilliseconds / 1000.0) * 1000.0);
+            return $"{rounded.Hours:00}:{rounded.Minutes:00}:{rounded.Seconds:00}";
         }
 
         public override void LoadSubtitle(Subtitle subtitle, List<string> lines, string fileName)

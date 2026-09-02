@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -55,7 +55,7 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
     public ISpeechToTextEngine? Engine { get; internal set; }
 
     /// <summary>
-    /// CrispASR download variant. On Windows: "cpu", "cpu-legacy", "vulkan", or "cuda" (defaults to "vulkan").
+    /// CrispASR download variant. On Windows: "cpu", "cpu-legacy", "vulkan", "cuda" or "cuda13" (defaults to "vulkan").
     /// On Linux x86_64: "cuda", "cuda13", "vulkan", "hip", or null/empty for the default CPU build.
     /// Ignored on macOS / Linux ARM64.
     /// </summary>
@@ -67,6 +67,8 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
     /// </summary>
     public bool Qwen3AsrUseVulkan { get; set; }
 
+    /// <summary>The .7z being streamed to disk, so a cancel can remove the partial file.</summary>
+    private string? _tempArchiveFileName;
     private readonly IWhisperDownloadService _whisperDownloadService;
     private readonly IQwen3AsrCppDownloadService _qwen3AsrCppDownloadService;
     private readonly ICrispAsrDownloadService _crispAsrDownloadService;
@@ -167,6 +169,13 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
 
                 TitleText = Se.Language.General.Unpacking7ZipArchiveDotDotDot;
                 StartIndeterminateProgress();
+
+                // Record the build before the archive is deleted below. This engine is streamed
+                // to a file rather than to memory (the archive is ~1.5 GB), so it takes the
+                // file overload. Without a sidecar nothing identifies the install and the
+                // engine-settings dialog can only report it as an unrecognized build (#14057).
+                DownloadHashManager.WriteSidecar(dir, DownloadHashManager.ResolvePurfviewFasterWhisperXxlKey(), tempFileName);
+
                 Unpacker.Extract7Zip(tempFileName, dir, "Faster-Whisper-XXL", _cancellationTokenSource, text => ProgressText = text);
                 StopIndeterminateProgress();
 
@@ -200,6 +209,7 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
 
                 TitleText = string.Format(Se.Language.General.UnpackingX, Engine.Name);
                 StartIndeterminateProgress();
+                DownloadHashManager.WriteSidecar(dir, DownloadHashManager.ResolveWhisperCTranslate2Key(), _downloadStream);
                 Unpack(dir, string.Empty);
                 StopIndeterminateProgress();
 
@@ -211,6 +221,50 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
 
                 DownloadAndUnpackSileroVad(dir);
 
+                OkPressed = true;
+                Close();
+            }
+            else if (Engine.Name == WhisperEngineWhisperX.StaticName)
+            {
+                var dir = Engine.GetAndCreateWhisperFolder();
+                var tempFileName = Path.Combine(dir, Engine.Name + ".7z");
+
+                TitleText = string.Format(Se.Language.General.UnpackingX, Engine.Name);
+                StartIndeterminateProgress();
+
+                // Record the build before the archive is deleted below. Like Faster-Whisper-XXL
+                // this engine is streamed to a file rather than to memory (the archive is
+                // 216 MB-355 MB), so it takes the file overload. Without a sidecar nothing
+                // identifies the install and the engine-settings dialog can only report it as
+                // an unrecognized build (#14057).
+                DownloadHashManager.WriteSidecar(dir, DownloadHashManager.ResolveWhisperXKey(), tempFileName);
+
+                // Flat archive (no top-level folder), so no folder level to skip.
+                Unpacker.Extract7Zip(tempFileName, dir, string.Empty, _cancellationTokenSource, text => ProgressText = text);
+                StopIndeterminateProgress();
+
+                try
+                {
+                    File.Delete(tempFileName);
+
+                    MakeExecutable(Engine.GetExecutable());
+
+                    // WhisperX bundles ctranslate2 from the same wheel family that hits the
+                    // glibc 2.41 PT_GNU_STACK=RWE problem patched for Purfview Faster-Whisper-XXL.
+                    ClearExecutableStack(dir);
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                if (_cancellationTokenSource.IsCancellationRequested)
+                {
+                    Cancel();
+                    return;
+                }
+
+                // WhisperX runs its own bundled voice activity detection - no Silero sidecar needed.
                 OkPressed = true;
                 Close();
             }
@@ -241,6 +295,7 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
                             : CrispAsrWindowsVariant switch
                             {
                                 "cuda"       => "crispasr-windows-x86_64-cuda",
+                                "cuda13"     => "crispasr-windows-x86_64-cuda13",
                                 "cpu"        => "crispasr-windows-x86_64-cpu",
                                 "cpu-legacy" => "crispasr-windows-x86_64-cpu-legacy",
                                 "vulkan"     => "crispasr-windows-x86_64-vulkan",
@@ -256,6 +311,10 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
                 else if (Engine is WhisperEngineCpp or WhisperEngineCppCuBlas or WhisperEngineCppVulkan)
                 {
                     WriteWhisperCppInstalledHash(folder);
+                }
+                else if (Engine is WhisperEngineConstMe)
+                {
+                    DownloadHashManager.WriteSidecar(folder, DownloadHashManager.ResolveWhisperConstMeKey(), _downloadStream);
                 }
                 else if (Engine is Qwen3AsrCppEngine)
                 {
@@ -511,6 +570,27 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
     {
         _cancellationTokenSource?.Cancel();
         StopIndeterminateProgress();
+
+        // The Faster-Whisper-XXL / WhisperX archives stream straight to disk (216 MB - 1.5 GB) and
+        // were deleted only on the success path, so cancelling stranded the partial file in the
+        // engine folder where nothing would ever clean it up or notice it.
+        var partialArchive = _tempArchiveFileName;
+        _tempArchiveFileName = null;
+        if (!string.IsNullOrEmpty(partialArchive))
+        {
+            try
+            {
+                if (File.Exists(partialArchive))
+                {
+                    File.Delete(partialArchive);
+                }
+            }
+            catch
+            {
+                // best-effort - it may still be open for writing
+            }
+        }
+
         Close();
     }
 
@@ -551,6 +631,17 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
         {
             _downloadTask = _whisperDownloadService.DownloadWhisperCTranslate2(_downloadStream, downloadProgress, _cancellationTokenSource.Token);
         }
+        else if (Engine is WhisperEngineWhisperX)
+        {
+            // A file download, not the shared _downloadStream MemoryStream: at 216 MB-355 MB,
+            // buffering this in memory (with MemoryStream's doubling growth) would peak far
+            // higher before unpacking even starts. Purfview Faster-Whisper-XXL is downloaded
+            // the same way for the same reason.
+            var whisperXDir = Engine.GetAndCreateWhisperFolder();
+            var whisperXTempFileName = Path.Combine(whisperXDir, Engine.Name + ".7z");
+            _tempArchiveFileName = whisperXTempFileName;
+            _downloadTask = _whisperDownloadService.DownloadWhisperX(whisperXTempFileName, downloadProgress, _cancellationTokenSource.Token);
+        }
         else if (Engine is WhisperEngineConstMe)
         {
             _downloadTask = _whisperDownloadService.DownloadWhisperConstMe(_downloadStream, downloadProgress, _cancellationTokenSource.Token);
@@ -559,6 +650,7 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
         {
             var dir = Engine.GetAndCreateWhisperFolder();
             var tempFileName = Path.Combine(dir, Engine.Name + ".7z");
+            _tempArchiveFileName = tempFileName;
             _downloadTask = _whisperDownloadService.DownloadWhisperPurfviewFasterWhisperXxl(tempFileName, downloadProgress, _cancellationTokenSource.Token);
         }
         else if (Engine is Qwen3AsrCppEngine)
@@ -573,6 +665,7 @@ public partial class DownloadSpeechToTextEngineViewModel : ObservableObject, ICl
                 _downloadTask = CrispAsrWindowsVariant switch
                 {
                     "cuda"       => _crispAsrDownloadService.DownloadEngineWindowsCuda(_downloadStream, downloadProgress, _cancellationTokenSource.Token),
+                    "cuda13"     => _crispAsrDownloadService.DownloadEngineWindowsCuda13(_downloadStream, downloadProgress, _cancellationTokenSource.Token),
                     "cpu"        => _crispAsrDownloadService.DownloadEngineWindowsCpu(_downloadStream, downloadProgress, _cancellationTokenSource.Token),
                     "cpu-legacy" => _crispAsrDownloadService.DownloadEngineWindowsCpuLegacy(_downloadStream, downloadProgress, _cancellationTokenSource.Token),
                     _            => _crispAsrDownloadService.DownloadEngineWindowsVulkan(_downloadStream, downloadProgress, _cancellationTokenSource.Token),

@@ -19,6 +19,16 @@ namespace Nikse.SubtitleEdit.Features.Ocr;
 public partial class PaddleOcr
 {
     public string Error { get; set; }
+
+    /// <summary>
+    /// Detected text regions with a recognition confidence below this percentage are
+    /// dropped from the result (0 = keep everything). Off by default so subtitle-bitmap
+    /// OCR is unchanged; Video OCR turns it on, where low-confidence regions are almost
+    /// always background clutter (scene text, logos, edge junk) rather than subtitle text.
+    /// </summary>
+    public int MinConfidencePercent { get; set; }
+
+    private bool _batchRightToLeft;
     private List<PaddleOcrResultParser.TextDetectionResult> _textDetectionResults = new();
     private IProgress<PaddleOcrBatchProgress>? _batchProgress;
     private string _batchFileName = string.Empty;
@@ -35,7 +45,7 @@ public partial class PaddleOcr
     // The pinned PaddleOCR-Standalone release. Bumping it means updating this one line and
     // the file names below - and Se.PaddleOcrFolder when the underlying PaddleOCR version
     // changes, so engine and models never mix across releases.
-    private const string StandaloneRelease = "https://github.com/timminator/PaddleOCR-Standalone/releases/download/v1.4.0/";
+    private const string StandaloneRelease = "https://github.com/timminator/PaddleOCR-Standalone/releases/download/v3.7.0/";
 
     /// <summary>
     /// One downloadable Paddle OCR archive: the file(s) to fetch, and the folder level inside
@@ -48,19 +58,19 @@ public partial class PaddleOcr
     {
         return downloadType switch
         {
-            PaddleOcrDownloadType.Models => Archive("PaddleOCR.PP-OCRv5.support.files.VideOCR.7z", "PaddleOCR.PP-OCRv5.support.files"),
-            PaddleOcrDownloadType.EngineCpu => Archive("PaddleOCR-CPU-v1.4.0.7z"),
-            PaddleOcrDownloadType.EngineGpu11 => Archive("PaddleOCR-GPU-v1.4.0-CUDA-11.8.7z"),
-            PaddleOcrDownloadType.EngineGpu12 => Archive("PaddleOCR-GPU-v1.4.0-CUDA-12.9.7z"),
-            PaddleOcrDownloadType.EngineCpuLinux => Archive("PaddleOCR-CPU-v1.4.0-Linux.7z"),
-            PaddleOcrDownloadType.EngineGpu11Linux => Archive("PaddleOCR-GPU-v1.4.0-CUDA-11.8-Linux.7z"),
+            PaddleOcrDownloadType.Models => Archive("PaddleOCR.PP-OCRv6.support.files.VideOCR.7z", "PaddleOCR.PP-OCRv6.support.files"),
+            PaddleOcrDownloadType.EngineCpu => Archive("PaddleOCR-CPU-v3.7.0.7z"),
+            PaddleOcrDownloadType.EngineGpu11 => Archive("PaddleOCR-GPU-v3.7.0-CUDA-11.8.7z"),
+            PaddleOcrDownloadType.EngineGpu12 => Archive("PaddleOCR-GPU-v3.7.0-CUDA-12.9.7z"),
+            PaddleOcrDownloadType.EngineCpuLinux => Archive("PaddleOCR-CPU-v3.7.0-Linux.7z"),
+            PaddleOcrDownloadType.EngineGpu11Linux => Archive("PaddleOCR-GPU-v3.7.0-CUDA-11.8-Linux.7z"),
 
             // Split into two volumes upstream. Both have to land in the same folder before the
             // .001 is handed to the extractor - the download queue takes care of that.
             PaddleOcrDownloadType.EngineGpu12Linux => Archive(
-                "PaddleOCR-GPU-v1.4.0-CUDA-12.9-Linux.7z.001",
-                "PaddleOCR-GPU-v1.4.0-CUDA-12.9-Linux",
-                "PaddleOCR-GPU-v1.4.0-CUDA-12.9-Linux.7z.002"),
+                "PaddleOCR-GPU-v3.7.0-CUDA-12.9-Linux.7z.001",
+                "PaddleOCR-GPU-v3.7.0-CUDA-12.9-Linux",
+                "PaddleOCR-GPU-v3.7.0-CUDA-12.9-Linux.7z.002"),
 
             _ => throw new ArgumentOutOfRangeException(nameof(downloadType), downloadType, "Unknown Paddle OCR download type"),
         };
@@ -83,7 +93,7 @@ public partial class PaddleOcr
     private const string TextlineOrientationModelName = "PP-LCNet_x1_0_textline_ori";
 
     // The script groups below mirror LATIN_LANGS/ARABIC_LANGS/ESLAV_LANGS/CYRILLIC_LANGS/
-    // DEVANAGARI_LANGS in PaddleOCR 3.4 (paddleocr/_pipelines/ocr.py) - the version the
+    // DEVANAGARI_LANGS in PaddleOCR 3.7 (paddleocr/_utils/langs.py) - the version the
     // bundled standalone engine is built from. Keep them in sync with GetLanguages(); a
     // code offered in the dropdown but missing from every group here silently falls
     // through to the Latin recognition model and OCRs to garbage.
@@ -126,6 +136,31 @@ public partial class PaddleOcr
         "el", "ta", "te", "th"
     };
 
+    // Pali is the one Latin language PP-OCRv6 does not cover, so it stays on the PP-OCRv5
+    // Latin model (_PPOCRV6_UNSUPPORTED_LATIN_LANGS in paddleocr/_pipelines/ocr.py).
+    private const string PaliLanguageCode = "pi";
+
+    /// <summary>
+    /// True for the languages PP-OCRv6 (new in PaddleOCR 3.7) recognizes with its single
+    /// unified model: Chinese, English, Japanese and the Latin languages except Pali - the
+    /// _PPOCRV6_LANGS set in paddleocr/_pipelines/ocr.py. No non-Latin script has a v6 model
+    /// at all, so every other language keeps the PP-OCRv5 (Georgian: PP-OCRv3) models that
+    /// the support-files bundle still ships alongside the v6 pair.
+    /// </summary>
+    private static bool IsPpOcrV6Language(string language)
+    {
+        if (language is "ch" or "chinese_cht" or "en" or "japan")
+        {
+            return true;
+        }
+
+        return LatinLanguageCodes.Contains(language) && language != PaliLanguageCode;
+    }
+
+    // PP-OCRv6 replaced the mobile/server pair with tiny/small/medium tiers, and the bundle
+    // ships small and medium - so the saved mode picks between those two.
+    private static string PpOcrV6Tier(string mode) => mode == "server" ? "medium" : "small";
+
     internal static IReadOnlyCollection<string> GetLatinLanguageCodesForTest() => LatinLanguageCodes;
 
     internal static IEnumerable<string> GetAllScriptGroupCodesForTest() =>
@@ -148,19 +183,16 @@ public partial class PaddleOcr
         _cancellationToken = new CancellationToken();
     }
 
-    // Only the recognition models shipped in "PaddleOCR.PP-OCRv5.support.files" are on
+    // Only the recognition models shipped in "PaddleOCR.PP-OCRv6.support.files" are on
     // disk - nothing is fetched per language. Returning a name that is not in that bundle
     // points at a folder that does not exist, and the run then fails when PaddleX tries to
     // read the model's inference.yml.
     internal static string GetRecName(string language, string mode)
     {
         string recName;
-        if (language == "ch" ||
-            language == "chinese_cht" ||
-            language == "en" ||
-            language == "japan")
+        if (IsPpOcrV6Language(language))
         {
-            recName = $"PP-OCRv5_{mode}_rec";
+            recName = $"PP-OCRv6_{PpOcrV6Tier(mode)}_rec";
         }
         else if (ArabicLanguageCodes.Contains(language))
         {
@@ -193,6 +225,8 @@ public partial class PaddleOcr
         }
         else
         {
+            // Pali, plus the safety net for a code no script group claims - the v6 bundle
+            // no longer has a general-purpose PP-OCRv5 model to fall back on.
             recName = "latin_PP-OCRv5_mobile_rec";
         }
 
@@ -201,10 +235,16 @@ public partial class PaddleOcr
 
     internal static string GetDetectionName(string language, string mode)
     {
-        // Georgian is the one remaining PP-OCRv3 language; everything else recognizes
-        // with a PP-OCRv5 model and detects with the matching PP-OCRv5 detector.
-        return language == "ka"
-            ? "PP-OCRv3_mobile_det"
+        // Georgian is the one remaining PP-OCRv3 language.
+        if (language == "ka")
+        {
+            return "PP-OCRv3_mobile_det";
+        }
+
+        // Detector and recognition model come from the same PaddleOCR generation, which is
+        // how upstream pairs them (PP-OCRv6 languages get the v6 detector of the same tier).
+        return IsPpOcrV6Language(language)
+            ? $"PP-OCRv6_{PpOcrV6Tier(mode)}_det"
             : $"PP-OCRv5_{mode}_det";
     }
 
@@ -279,6 +319,7 @@ public partial class PaddleOcr
     {
         var detName = GetDetectionName(language, mode);
         var recName = GetRecName(language, mode);
+        _batchRightToLeft = ArabicLanguageCodes.Contains(language);
         _batchProgress = progress;
         var folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(folder);
@@ -543,7 +584,8 @@ public partial class PaddleOcr
             var p = new PaddleOcrBatchProgress
             {
                 Index = input.Index,
-                Text = MakeResult(_textDetectionResults),
+                Text = MakeResult(_textDetectionResults, out var resultConfidence),
+                Confidence = resultConfidence,
                 Item = input.Item,
             };
             _batchProgress?.Report(p);
@@ -621,11 +663,14 @@ public partial class PaddleOcr
             var results = ParsePaddleOcrJsonContent(json, jsonPath);
             Se.WriteToolsLog(
                 $"Paddle OCR result {reportedStems.Count} (line index {input.Index}) ready at {_batchStopwatch.Elapsed.TotalSeconds:F1}s");
+            var resultConfidence = 0.0;
+            var text = results.Count > 0 ? MakeResult(results, out resultConfidence) : string.Empty;
             _batchProgress?.Report(new PaddleOcrBatchProgress
             {
                 Index = input.Index,
                 Item = input.Item,
-                Text = results.Count > 0 ? MakeResult(results) : string.Empty,
+                Text = text,
+                Confidence = resultConfidence,
             });
         }
     }
@@ -981,8 +1026,39 @@ public partial class PaddleOcr
 
     private string MakeResult(List<PaddleOcrResultParser.TextDetectionResult> textDetectionResults)
     {
+        return MakeResult(textDetectionResults, out _);
+    }
+
+    internal string MakeResult(List<PaddleOcrResultParser.TextDetectionResult> textDetectionResults, out double confidence)
+    {
+        var kept = textDetectionResults;
+        if (MinConfidencePercent > 0)
+        {
+            // A confidence of 0 means "not reported" (older output formats) - never drop those.
+            kept = textDetectionResults
+                .Where(p => p.Confidence <= 0 || p.Confidence * 100.0 >= MinConfidencePercent)
+                .ToList();
+
+            // The cut removes low-confidence clutter *next to* confident text. When nothing
+            // clears the bar there is no confident text to prefer - dropping everything would
+            // erase a short real subtitle ("Wait.") that the engine merely hesitated on, so
+            // keep the frame's regions and let the low average confidence weigh the vote down.
+            if (kept.Count == 0)
+            {
+                kept = textDetectionResults;
+            }
+        }
+
+        if (kept.Count == 0)
+        {
+            confidence = 0;
+            return string.Empty;
+        }
+
+        confidence = kept.Average(p => p.Confidence <= 0 ? 1.0 : p.Confidence);
+
         var sb = new StringBuilder();
-        var lines = MakeLines(textDetectionResults);
+        var lines = MakeLines(kept, _batchRightToLeft);
         foreach (var line in lines)
         {
             var text = string.Join(' ', line.Select(p => p.Text));
@@ -992,40 +1068,74 @@ public partial class PaddleOcr
         return sb.ToString().Trim().Replace(" " + Environment.NewLine, Environment.NewLine);
     }
 
-    private List<List<PaddleOcrResultParser.TextDetectionResult>> MakeLines(
-        List<PaddleOcrResultParser.TextDetectionResult> input)
+    /// <summary>
+    /// Groups the detected text boxes into visual lines by vertical overlap (two boxes
+    /// share a line when either box's vertical midpoint falls inside the other), then
+    /// orders lines top-to-bottom and the words within a line left-to-right - or
+    /// right-to-left for Arabic-script languages, where the first word of the sentence
+    /// is the rightmost box.
+    /// </summary>
+    internal static List<List<PaddleOcrResultParser.TextDetectionResult>> MakeLines(
+        List<PaddleOcrResultParser.TextDetectionResult> input, bool rightToLeft)
     {
-        var result = new List<List<PaddleOcrResultParser.TextDetectionResult>>();
-        var heightAverage = input.Average(p => p.BoundingBox.Height);
-        var sorted = input.OrderBy(p => p.BoundingBox.Center.Y);
-        var line = new List<PaddleOcrResultParser.TextDetectionResult>();
-        PaddleOcrResultParser.TextDetectionResult? last = null;
-        foreach (var element in sorted)
+        var lines = new List<List<PaddleOcrResultParser.TextDetectionResult>>();
+        foreach (var element in input)
         {
-            if (last == null)
+            List<PaddleOcrResultParser.TextDetectionResult>? home = null;
+            foreach (var line in lines)
             {
-                line.Add(element);
+                if (IsOnSameLine(line[0].BoundingBox, element.BoundingBox))
+                {
+                    home = line;
+                    break;
+                }
+            }
+
+            if (home == null)
+            {
+                lines.Add(new List<PaddleOcrResultParser.TextDetectionResult> { element });
             }
             else
             {
-                if (element.BoundingBox.Center.Y > last.BoundingBox.TopLeft.Y + heightAverage)
-                {
-                    result.Add(line.OrderBy(p => p.BoundingBox.TopLeft.X).ToList());
-                    line = new List<PaddleOcrResultParser.TextDetectionResult>();
-                }
-
-                line.Add(element);
+                home.Add(element);
             }
-
-            last = element;
         }
 
-        if (line.Count > 0)
+        foreach (var line in lines)
         {
-            result.Add(line.OrderBy(p => p.BoundingBox.TopLeft.X).ToList());
+            line.Sort((a, b) => rightToLeft
+                ? b.BoundingBox.TopLeft.X.CompareTo(a.BoundingBox.TopLeft.X)
+                : a.BoundingBox.TopLeft.X.CompareTo(b.BoundingBox.TopLeft.X));
         }
 
-        return result;
+        lines.Sort((a, b) => MinY(a).CompareTo(MinY(b)));
+        return lines;
+    }
+
+    private static double MinY(List<PaddleOcrResultParser.TextDetectionResult> line)
+    {
+        var min = double.MaxValue;
+        foreach (var element in line)
+        {
+            var y = Math.Min(element.BoundingBox.TopLeft.Y, element.BoundingBox.TopRight.Y);
+            if (y < min)
+            {
+                min = y;
+            }
+        }
+
+        return min;
+    }
+
+    private static bool IsOnSameLine(PaddleOcrResultParser.BoundingBox a, PaddleOcrResultParser.BoundingBox b)
+    {
+        var aMin = Math.Min(a.TopLeft.Y, a.TopRight.Y);
+        var aMax = Math.Max(a.BottomLeft.Y, a.BottomRight.Y);
+        var bMin = Math.Min(b.TopLeft.Y, b.TopRight.Y);
+        var bMax = Math.Max(b.BottomLeft.Y, b.BottomRight.Y);
+        var aMid = (aMin + aMax) / 2.0;
+        var bMid = (bMin + bMax) / 2.0;
+        return (aMin < bMid && bMid < aMax) || (bMin < aMid && aMid < bMax);
     }
 
     private void OutputHandler(object sendingProcess, DataReceivedEventArgs outLine)
@@ -1088,7 +1198,8 @@ public partial class PaddleOcr
                         {
                             Index = old.Index,
                             Item = old.Item,
-                            Text = MakeResult(_textDetectionResults),
+                            Text = MakeResult(_textDetectionResults, out var resultConfidence),
+                            Confidence = resultConfidence,
                         };
                         _textDetectionResults.Clear();
                         _batchProgress?.Report(progress);
@@ -1122,7 +1233,7 @@ public partial class PaddleOcr
     }
 
 
-    // Every language PaddleOCR 3.4 supports with a recognition model that ships in the
+    // Every language PaddleOCR 3.7 supports with a recognition model that ships in the
     // bundled support files. Adding a code here is enough to offer it - as long as the
     // code is also listed in the matching script group above, so GetRecName picks the
     // right model (PaddleOcrLanguageMappingTests guards that).

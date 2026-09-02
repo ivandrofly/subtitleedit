@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Layout;
 using Nikse.SubtitleEdit.Controls;
@@ -68,7 +69,7 @@ public class ExportEbuStlWindow : Window
 
         Content = grid;
 
-        Activated += delegate { comboBoxCodePage.Focus(); }; // initial focus on an input, not an action button - a focused button clicks on bare Space
+        UiUtil.FocusOnFirstActivation(this, comboBoxCodePage); // initial focus on an input, not an action button - a focused button clicks on bare Space
         KeyDown += vm.OnKeyDown;
     }
 
@@ -128,18 +129,23 @@ public class ExportEbuStlWindow : Window
 
         var labelOriginalProgramTitle = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.OriginalProgramTitle);
         var textBoxOriginalProgramTitle = UiUtil.MakeTextBox(textBoxWidth, vm, nameof(vm.OriginalProgramTitle));
+        textBoxOriginalProgramTitle.MaxLength = 32; // EBU STL header field width
 
         var labelOriginalEpisodeTitle = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.OriginalEpisodeTitle);
         var textBoxOriginalEpisodeTitle = UiUtil.MakeTextBox(textBoxWidth, vm, nameof(vm.OriginalEpisodeTitle));
+        textBoxOriginalEpisodeTitle.MaxLength = 32; // EBU STL header field width
 
         var labelTranslatedProgramTitle = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.TranslatedProgramTitle);
         var textBoxTranslatedProgramTitle = UiUtil.MakeTextBox(textBoxWidth, vm, nameof(vm.TranslatedProgramTitle));
+        textBoxTranslatedProgramTitle.MaxLength = 32; // EBU STL header field width
 
         var labelTranslatedEpisodeTitle = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.TranslatedEpisodeTitle);
         var textBoxTranslatedEpisodeTitle = UiUtil.MakeTextBox(textBoxWidth, vm, nameof(vm.TranslatedEpisodeTitle));
+        textBoxTranslatedEpisodeTitle.MaxLength = 32; // EBU STL header field width
 
         var labelTranslatorsName = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.TranslatorsName);
         var textBoxTranslatorsName = UiUtil.MakeTextBox(textBoxWidth, vm, nameof(vm.TranslatorsName));
+        textBoxTranslatorsName.MaxLength = 32; // EBU STL header field width
 
         grid.Add(labelCodePageNumber, 0, 0);
         grid.Add(comboBoxCodeNumbers, 0, 1);
@@ -177,9 +183,11 @@ public class ExportEbuStlWindow : Window
 
         var labelSubtitleListReferenceCode = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.SubtitleListReferenceCode);
         var textBoxSubtitleListReferenceCode = UiUtil.MakeTextBox(textBoxWidth, vm, nameof(vm.SubtitleListReferenceCode));
+        textBoxSubtitleListReferenceCode.MaxLength = 16; // EBU STL header field width
 
         var labelCountryOfOrigin = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.CountryOfOrigin);
         var textBoxCountryOfOrigin = UiUtil.MakeTextBox(textBoxWidth, vm, nameof(vm.CountryOfOrigin));
+        textBoxCountryOfOrigin.MaxLength = 3; // EBU STL header field width
 
         var labelTimeCodeStatus = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.TimeCodeStatus);
         var comboBoxTimeCodeStatus = UiUtil.MakeComboBox(vm.TimeCodeStatusList, vm, nameof(vm.SelectedTimeCodeStatus)).WithMinWidth(textBoxWidth);
@@ -259,6 +267,10 @@ public class ExportEbuStlWindow : Window
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) },
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) },
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) },
             },
             ColumnDefinitions =
             {
@@ -291,11 +303,31 @@ public class ExportEbuStlWindow : Window
 
         var labelTeletext = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.Teletext);
 
-        var labelUseBox = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.UseBox);
-        var checkBoxUseBox = UiUtil.MakeCheckBox(vm, nameof(vm.UseBox));
+        // Both are teletext control codes: "0 Open subtitling" writes neither, so leaving them
+        // enabled there only promises a box the file and the video preview never show.
+        var labelUseBox = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.UseBox).WithBindIsEnabled(nameof(vm.IsTeletext));
+        var checkBoxUseBox = UiUtil.MakeCheckBox(vm, nameof(vm.UseBox)).WithBindIsEnabled(nameof(vm.IsTeletext));
 
-        var labelUseDoubleHeight = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.DoubleHeight);
-        var checkBoxUseDoubleHeight = UiUtil.MakeCheckBox(vm, nameof(vm.UseDoubleHeight));
+        var labelUseDoubleHeight = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.DoubleHeight).WithBindIsEnabled(nameof(vm.IsTeletext));
+        var checkBoxUseDoubleHeight = UiUtil.MakeCheckBox(vm, nameof(vm.UseDoubleHeight)).WithBindIsEnabled(nameof(vm.IsTeletext));
+
+        // Not a save option: an STL file carries a character table, not a typeface. It is here so
+        // someone with a teletext face installed can have the preview look like a decoder.
+        var labelVideoPreview = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.VideoPreview);
+
+        var labelPreviewFont = UiUtil.MakeLabel(Se.Language.File.EbuSaveOptions.PreviewFont);
+        var comboBoxPreviewFont = UiUtil.MakeComboBox(vm.PreviewFonts, vm, nameof(vm.SelectedPreviewFont)).WithMinWidth(textBoxWidth);
+        var buttonPreviewFont = UiUtil.MakeButtonBrowse(vm.PickPreviewFontCommand, null, Se.Language.Tools.PickFontNameTitle);
+        var panelPreviewFont = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 5,
+            Children = { comboBoxPreviewFont, buttonPreviewFont },
+        };
+
+        // The drop-down is a name; this shows what the name looks like, in the font itself.
+        var labelPreviewFontSample = UiUtil.MakeLabel(string.Empty).WithBindText(vm, nameof(vm.PreviewFontSample));
+        labelPreviewFontSample.Bind(TemplatedControl.FontFamilyProperty, new Binding(nameof(vm.PreviewFontFamily)) { Source = vm });
 
 
         grid.Add(labelJustification, 0, 0);
@@ -320,6 +352,13 @@ public class ExportEbuStlWindow : Window
 
         grid.Add(labelUseDoubleHeight, 9, 0);
         grid.Add(checkBoxUseDoubleHeight, 9, 1);
+
+        grid.Add(labelVideoPreview, 11, 0);
+
+        grid.Add(labelPreviewFont, 12, 0);
+        grid.Add(panelPreviewFont, 12, 1);
+
+        grid.Add(labelPreviewFontSample, 13, 1);
 
         return UiUtil.MakeBorderForControl(grid).WithMinWidth(944).WithMinHeight(465);
     }

@@ -1,4 +1,5 @@
 ﻿using Nikse.SubtitleEdit.Core.Common;
+using Nikse.SubtitleEdit.Core.Enums;
 using Nikse.SubtitleEdit.Core.Interfaces;
 using System;
 using System.Text.RegularExpressions;
@@ -12,6 +13,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             public static string FixUppercaseIInsideLowercaseWord { get; set; } = "Fix uppercase 'i' inside lowercase word";
             public static string FixUppercaseIInsideLowercaseWords { get; set; } = "Fix uppercase 'i' inside lowercase words (OCR error)";
         }
+
+        public FixType FixType => FixType.Casing;
 
         private static readonly Regex ReAfterLowercaseLetter = new Regex(@"\p{Ll}I", RegexOptions.Compiled);
         private static readonly Regex ReBeforeLowercaseLetter = new Regex(@"\p{L}I\p{Ll}", RegexOptions.Compiled);
@@ -30,7 +33,10 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                 Match match = ReAfterLowercaseLetter.Match(st.StrippedText);
                 while (match.Success)
                 {
-                    if (!(match.Index > 1 && st.StrippedText.Substring(match.Index - 1, 2) == "Mc") // irish names, McDonalds etc.
+                    // ">= 1", not "> 1": a line starting with "McIntyre" matches at index 1, so the
+                    // guard was skipped and the name was corrupted to "Mclntyre". The second loop
+                    // in this file already uses >= 1.
+                    if (!(match.Index >= 1 && st.StrippedText.Substring(match.Index - 1, 2) == "Mc") // irish names, McDonalds etc.
                         && st.StrippedText[match.Index + 1] == 'I'
                         && callbacks.AllowFix(p, fixAction))
                     {

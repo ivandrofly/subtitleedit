@@ -6,6 +6,9 @@ public class SeVideoOcr
 {
     public string Engine { get; set; }
     public string PaddleLanguage { get; set; }
+
+    /// <summary>Apple Vision's recognition language, as its BCP-47 tag. macOS only.</summary>
+    public string AppleVisionLanguage { get; set; }
     public string OllamaUrl { get; set; }
     public string OllamaModel { get; set; }
     public string OllamaLanguage { get; set; }
@@ -25,6 +28,12 @@ public class SeVideoOcr
     public int BrightnessMinimum { get; set; }
     public int MaxImageWidth { get; set; }
     public bool AddAssaPositionTag { get; set; }
+
+    /// <summary>Run the OCR fix engine (replace lists + spell check marking) on the result lines.</summary>
+    public bool FixOcrErrors { get; set; }
+
+    /// <summary>Spell check dictionary for the fix engine; empty = pick by the OCR language.</summary>
+    public string DictionaryFileName { get; set; }
     public double CropXPercent { get; set; }
     public double CropYPercent { get; set; }
     public double CropWidthPercent { get; set; }
@@ -32,10 +41,14 @@ public class SeVideoOcr
 
     public SeVideoOcr()
     {
-        Engine = System.OperatingSystem.IsWindows() || System.OperatingSystem.IsLinux()
-            ? OcrEngineType.PaddleOcrStandalone.ToString()
-            : OcrEngineType.PaddleOcrPython.ToString();
+        // Unlike the other two, this setting stores the enum name rather than the display name.
+        // macOS had been defaulting to the Python PaddleOCR, which needs a pip install before it
+        // does anything; Apple Vision is there already.
+        Engine = System.OperatingSystem.IsMacOS()
+            ? OcrEngineType.AppleVision.ToString()
+            : OcrEngineType.PaddleOcrStandalone.ToString();
         PaddleLanguage = "en";
+        AppleVisionLanguage = "en-US";
         OllamaUrl = "http://localhost:11434/api/chat";
         OllamaModel = "glm-ocr";
         OllamaLanguage = "English";
@@ -58,6 +71,8 @@ public class SeVideoOcr
         BrightnessMinimum = 190;
         MaxImageWidth = 720;
         AddAssaPositionTag = false;
+        FixOcrErrors = true;
+        DictionaryFileName = string.Empty;
 
         // Default scan area: bottom third, full width.
         CropXPercent = 0;

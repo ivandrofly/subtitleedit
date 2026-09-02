@@ -176,6 +176,8 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
     [ObservableProperty] private ObservableCollection<LlamaCppModelDisplay> _llamaCppModels = new();
     [ObservableProperty] private LlamaCppModelDisplay? _selectedLlamaCppModel;
     [ObservableProperty] private bool _llamaCppModelComboIsVisible;
+    [ObservableProperty] private bool _llamaCppRemoteToggleIsVisible;
+    [ObservableProperty] private bool _llamaCppUseRemoteServer;
 
     /// <summary>
     /// Re-assigns the auto-translate engine combo's item template, set by the view. The dots are a
@@ -253,6 +255,13 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
     [ObservableProperty] private string _assaChangeStyleImportFileName;
     [ObservableProperty] private string _assaChangeStyleImportedStyleHeader;
     [ObservableProperty] private bool _assaChangeStyleTrimUnusedStyles;
+
+    // ASSA change style properties
+    [ObservableProperty] private bool _assaChangeStylePropertiesSetSpacing;
+    [ObservableProperty] private decimal _assaChangeStylePropertiesSpacing;
+    [ObservableProperty] private bool _assaChangeStylePropertiesSetAlignment;
+    [ObservableProperty] private ObservableCollection<DisplayAlignment> _assaChangeStylePropertiesAlignmentOptions;
+    [ObservableProperty] private DisplayAlignment? _selectedAssaChangeStylePropertiesAlignment;
 
     // Merge short lines
     // Embed fonts (ASSA)
@@ -431,6 +440,7 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         AutoTranslators =
         [
             new OllamaTranslate(),
+            new OllamaAdvancedTranslate(),
             new LibreTranslate(),
             new LmStudioTranslate(),
             new LlamaCppTranslate(),
@@ -460,6 +470,12 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         AssaChangeStyleImportFileName = string.Empty;
         AssaChangeStyleImportedStyleHeader = string.Empty;
         AssaChangeStyleTrimUnusedStyles = false;
+
+        AssaChangeStylePropertiesAlignmentOptions = new ObservableCollection<DisplayAlignment>(DisplayAlignment.GetAll());
+        SelectedAssaChangeStylePropertiesAlignment = AssaChangeStylePropertiesAlignmentOptions[1];
+        AssaChangeStylePropertiesSetSpacing = true;
+        AssaChangeStylePropertiesSpacing = 0;
+        AssaChangeStylePropertiesSetAlignment = false;
 
         FixCommonErrorsProfile = LoadDefaultProfile();
 
@@ -561,7 +577,7 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
     {
         return config.AutoTranslate.IsActive &&
                config.AutoTranslate.Translator is LlamaCppTranslate or LlamaCppAdvancedTranslate &&
-               !Se.Settings.AutoTranslate.LlamaCppUseRemoteServer;
+               !Se.Settings.Tools.BatchConvert.LlamaCppUseRemoteServer;
     }
 
     private void UpdateFilteredFiles()
@@ -666,6 +682,7 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         Se.Settings.Tools.BatchConvert.AutoTranslateEngine = SelectedAutoTranslator.Name;
         Se.Settings.Tools.BatchConvert.AutoTranslateSourceLanguage = SelectedSourceLanguage?.TwoLetterIsoLanguageName ?? "auto";
         Se.Settings.Tools.BatchConvert.AutoTranslateTargetLanguage = SelectedTargetLanguage?.TwoLetterIsoLanguageName ?? "en";
+        Se.Settings.Tools.BatchConvert.LlamaCppUseRemoteServer = LlamaCppUseRemoteServer;
 
         // Change casing
         if (NormalCasing)
@@ -699,6 +716,13 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         // Change speed
         Se.Settings.Tools.BatchConvert.ChangeSpeedPercent = ChangeSpeedPercent;
 
+        // Merge lines with same text / same time codes (shared with the standalone dialogs)
+        Se.Settings.Tools.MergeSameText.MaxMillisecondsBetweenLines = MergeSameTextMaxMillisecondsBetweenLines;
+        Se.Settings.Tools.MergeSameText.IncludeIncrementingLines = MergeSameTextIncludeIncrementingLines;
+        Se.Settings.Tools.MergeSameTimeCode.MaxMillisecondsDifference = MergeSameTimeMaxMillisecondsDifference;
+        Se.Settings.Tools.MergeSameTimeCode.MergeDialog = MergeSameTimeMergeDialog;
+        Se.Settings.Tools.MergeSameTimeCode.AutoBreak = MergeSameTimeAutoBreak;
+
         // Delete lines
         Se.Settings.Tools.BatchConvert.DeleteXFirstLines = DeleteXFirstLines;
         Se.Settings.Tools.BatchConvert.DeleteXLastLines = DeleteXLastLines;
@@ -730,6 +754,12 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         Se.Settings.Tools.BatchConvert.AssaChangeStyleToStyle = AssaChangeStyleToStyle ?? string.Empty;
         Se.Settings.Tools.BatchConvert.AssaChangeStyleTrimUnusedStyles = AssaChangeStyleTrimUnusedStyles;
 
+        // ASSA change style properties
+        Se.Settings.Tools.BatchConvert.AssaChangeStylePropertiesSetSpacing = AssaChangeStylePropertiesSetSpacing;
+        Se.Settings.Tools.BatchConvert.AssaChangeStylePropertiesSpacing = AssaChangeStylePropertiesSpacing;
+        Se.Settings.Tools.BatchConvert.AssaChangeStylePropertiesSetAlignment = AssaChangeStylePropertiesSetAlignment;
+        Se.Settings.Tools.BatchConvert.AssaChangeStylePropertiesAlignment = SelectedAssaChangeStylePropertiesAlignment?.Code ?? "an2";
+
         // Embed fonts
         Se.Settings.Tools.BatchConvert.AssaEmbedFontsTrim = AssaEmbedFontsTrim;
 
@@ -752,6 +782,15 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         Se.Settings.Tools.BatchConvert.BeautifyTimeCodesSnapToShotChanges = BeautifyTimeCodesSnapToShotChanges;
         Se.Settings.Tools.BatchConvert.BeautifyTimeCodesUseFixedFrameRate = BeautifyTimeCodesUseFixedFrameRate;
         Se.Settings.Tools.BatchConvert.BeautifyTimeCodesFixedFrameRate = SelectedBeautifyTimeCodesFrameRate;
+
+        // Remove formatting
+        Se.Settings.Tools.BatchConvert.FormattingRemoveAll = FormattingRemoveAll;
+        Se.Settings.Tools.BatchConvert.FormattingRemoveItalic = FormattingRemoveItalic;
+        Se.Settings.Tools.BatchConvert.FormattingRemoveBold = FormattingRemoveBold;
+        Se.Settings.Tools.BatchConvert.FormattingRemoveUnderline = FormattingRemoveUnderline;
+        Se.Settings.Tools.BatchConvert.FormattingRemoveFontTags = FormattingRemoveFontTags;
+        Se.Settings.Tools.BatchConvert.FormattingRemoveAlignmentTags = FormattingRemoveAlignmentTags;
+        Se.Settings.Tools.BatchConvert.FormattingRemoveColorTags = FormattingRemoveColors;
 
         // Snap time codes to frames
         Se.Settings.Tools.BatchConvert.SnapTimeCodesToFramesUseFixedFrameRate = SnapTimeCodesToFramesUseFixedFrameRate;
@@ -786,6 +825,18 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         {
             Se.Settings.Tools.BatchConvert.FixRtlMode = "ReverseStartEnd";
         }
+
+        // These were read in LoadSettings but never written back, so every number the user typed
+        // into the bridge-gaps, min-gap and split/break function panels was discarded on close.
+        // They go to the same keys the dedicated dialogs use.
+        Se.Settings.Tools.BridgeGaps.BridgeGapsSmallerThanMs = BridgeGapsSmallerThanMs;
+        Se.Settings.Tools.BridgeGaps.MinGapMs = BridgeGapsMinGapMs;
+        Se.Settings.Tools.BridgeGaps.PercentForLeft = BridgeGapsPercentForLeft;
+        Se.Settings.Tools.ApplyMinGapMilliseconds = MinGapMs;
+        Se.Settings.Tools.SplitRebalanceLongLinesSplit = SplitBreakSplitLongLines;
+        Se.Settings.Tools.SplitRebalanceLongLinesRebalance = SplitBreakRebalanceLongLines;
+        Se.Settings.Tools.SplitRebalanceLongLinesSingleLineMaxLength = SplitBreakSingleLineMaxLength;
+        Se.Settings.Tools.SplitRebalanceLongLinesMaxNumberOfLines = SplitBreakMaxNumberOfLines;
 
         Se.SaveSettings();
     }
@@ -889,6 +940,19 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         BridgeGapsMinGapMs = Se.Settings.Tools.BridgeGaps.MinGapMs;
         BridgeGapsPercentForLeft = Se.Settings.Tools.BridgeGaps.PercentForLeft;
 
+        // "Apply minimum gap" was never loaded. Its editor passes the saved value only as the
+        // converter's DefaultValue, which a non-nullable int can never reach, so the box opened at
+        // 0 and the function inserted no gap at all.
+        MinGapMs = Se.Settings.Tools.ApplyMinGapMilliseconds;
+
+        FormattingRemoveAll = Se.Settings.Tools.BatchConvert.FormattingRemoveAll;
+        FormattingRemoveItalic = Se.Settings.Tools.BatchConvert.FormattingRemoveItalic;
+        FormattingRemoveBold = Se.Settings.Tools.BatchConvert.FormattingRemoveBold;
+        FormattingRemoveUnderline = Se.Settings.Tools.BatchConvert.FormattingRemoveUnderline;
+        FormattingRemoveFontTags = Se.Settings.Tools.BatchConvert.FormattingRemoveFontTags;
+        FormattingRemoveAlignmentTags = Se.Settings.Tools.BatchConvert.FormattingRemoveAlignmentTags;
+        FormattingRemoveColors = Se.Settings.Tools.BatchConvert.FormattingRemoveColorTags;
+
         BeautifyTimeCodesSnapToShotChanges = Se.Settings.Tools.BatchConvert.BeautifyTimeCodesSnapToShotChanges;
         BeautifyTimeCodesUseFixedFrameRate = Se.Settings.Tools.BatchConvert.BeautifyTimeCodesUseFixedFrameRate;
         BeautifyTimeCodesUseVideoFrameRate = !BeautifyTimeCodesUseFixedFrameRate;
@@ -912,8 +976,15 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         ConvertColorsToDialogAddNewLines = Se.Settings.Tools.BatchConvert.ConvertColorsToDialogAddNewLines;
         ConvertColorsToDialogReBreakLines = Se.Settings.Tools.BatchConvert.ConvertColorsToDialogReBreakLines;
 
-        SplitBreakSingleLineMaxLength = Se.Settings.General.SubtitleLineMaximumLength;
-        SplitBreakMaxNumberOfLines = Se.Settings.General.MaxNumberOfLines;
+        // Prefer this tool's own saved values over the app-wide rules, exactly as the dedicated
+        // split/break dialog does - otherwise the numbers typed here reset on every open (and
+        // writing them back to General.* would silently change a global setting).
+        SplitBreakSingleLineMaxLength = Se.Settings.Tools.SplitRebalanceLongLinesSingleLineMaxLength > 0
+            ? Se.Settings.Tools.SplitRebalanceLongLinesSingleLineMaxLength
+            : Se.Settings.General.SubtitleLineMaximumLength;
+        SplitBreakMaxNumberOfLines = Se.Settings.Tools.SplitRebalanceLongLinesMaxNumberOfLines > 0
+            ? Se.Settings.Tools.SplitRebalanceLongLinesMaxNumberOfLines
+            : Se.Settings.General.MaxNumberOfLines;
         SplitBreakSplitLongLines = Se.Settings.Tools.SplitRebalanceLongLinesSplit;
         SplitBreakRebalanceLongLines = Se.Settings.Tools.SplitRebalanceLongLinesRebalance;
 
@@ -988,6 +1059,16 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         AssaChangeStyleFromStyle = Se.Settings.Tools.BatchConvert.AssaChangeStyleFromStyle ?? string.Empty;
         AssaChangeStyleToStyle = Se.Settings.Tools.BatchConvert.AssaChangeStyleToStyle ?? string.Empty;
         AssaChangeStyleTrimUnusedStyles = Se.Settings.Tools.BatchConvert.AssaChangeStyleTrimUnusedStyles;
+
+        // ASSA change style properties
+        AssaChangeStylePropertiesSetSpacing = Se.Settings.Tools.BatchConvert.AssaChangeStylePropertiesSetSpacing;
+        AssaChangeStylePropertiesSpacing = Se.Settings.Tools.BatchConvert.AssaChangeStylePropertiesSpacing;
+        AssaChangeStylePropertiesSetAlignment = Se.Settings.Tools.BatchConvert.AssaChangeStylePropertiesSetAlignment;
+        var styleAlignment = AssaChangeStylePropertiesAlignmentOptions.FirstOrDefault(p => p.Code == Se.Settings.Tools.BatchConvert.AssaChangeStylePropertiesAlignment);
+        if (styleAlignment != null)
+        {
+            SelectedAssaChangeStylePropertiesAlignment = styleAlignment;
+        }
 
         // Embed fonts
         AssaEmbedFontsTrim = Se.Settings.Tools.BatchConvert.AssaEmbedFontsTrim;
@@ -1444,11 +1525,11 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
             return true;
         }
 
-        // Remote mode: the user pointed llama.cpp at their own running llama-server. Detect it the same
-        // way the interactive Auto-translate window does - via the LlamaCppUseRemoteServer flag - not by
-        // whether AutoTranslateUrl is set, since that is pre-filled with the default localhost URL and so
-        // is never empty (which previously short-circuited the whole auto-start path).
-        if (Se.Settings.AutoTranslate.LlamaCppUseRemoteServer)
+        // Remote mode: the user pointed llama.cpp at their own running llama-server. Detect it via
+        // batch convert's own LlamaCppUseRemoteServer flag (#14005) - not by whether AutoTranslateUrl
+        // is set, since that is pre-filled with the default localhost URL and so is never empty
+        // (which previously short-circuited the whole auto-start path).
+        if (LlamaCppUseRemoteServer)
         {
             return true;
         }
@@ -1554,7 +1635,9 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
     [RelayCommand]
     private void ChangeSpeedSetToDropFrameValue()
     {
-        ChangeSpeedPercent = 99.9889;
+        // Inverse of the from-drop-frame preset under the factor = 100 / percent
+        // convention: 100 / 99.9001 = 1.001001, so From -> To round-trips.
+        ChangeSpeedPercent = 99.9001;
     }
 
     [RelayCommand]
@@ -1816,7 +1899,9 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
                 var subtitles = new ObservableCollection<SubtitleLineViewModel>();
                 var p = new Paragraph("This is a sample text", 0, 1000);
                 subtitles.Add(new SubtitleLineViewModel(p, new SubRip()));
-                vm.Initialize(exportHandler, subtitles, string.Empty, string.Empty, true);
+                // No file is loaded here - the dialog only edits the shared profile - so there
+                // is no header and script tags stay at scale 1.0.
+                vm.Initialize(exportHandler, subtitles, string.Empty, string.Empty, subtitleHeader: null, hideExportButton: true);
             });
             return;
         }
@@ -2350,13 +2435,27 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
     [RelayCommand]
     private async Task AutoTranslateBrowseModel()
     {
+        // Both Ollama engines list the same installed models; the picker only needs the host,
+        // so the advanced engine's /v1/chat/completions URL works as-is (it strips the path).
+        var isAdvanced = SelectedAutoTranslator is OllamaAdvancedTranslate;
+        var model = isAdvanced ? Se.Settings.AutoTranslate.OllamaAdvancedModel : Se.Settings.AutoTranslate.OllamaModel;
+        var url = isAdvanced ? Se.Settings.AutoTranslate.OllamaAdvancedUrl : Se.Settings.AutoTranslate.OllamaUrl;
+
         var result = await _windowService.ShowDialogAsync<PickOllamaModelWindow, PickOllamaModelViewModel>(Window!,
-            vm => { vm.Initialize(Se.Language.General.PickOllamaModel, Se.Settings.AutoTranslate.OllamaModel, Se.Settings.AutoTranslate.OllamaUrl); });
+            vm => { vm.Initialize(Se.Language.General.PickOllamaModel, model, url); });
 
         if (result is { OkPressed: true, SelectedModel: not null })
         {
             AutoTranslateModel = result.SelectedModel;
-            Se.Settings.AutoTranslate.OllamaModel = result.SelectedModel;
+            if (isAdvanced)
+            {
+                Se.Settings.AutoTranslate.OllamaAdvancedModel = result.SelectedModel;
+            }
+            else
+            {
+                Se.Settings.AutoTranslate.OllamaModel = result.SelectedModel;
+            }
+
             SaveSettings();
         }
     }
@@ -2655,7 +2754,7 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
             MergeLinesWithSameTimeCodes = new BatchConvertConfig.MergeLinesWithSameTimeCodesSettings
             {
                 IsActive = activeFunctions.Contains(BatchConvertFunctionType.MergeLinesWithSameTimeCodes),
-                MaxMillisecondsDifference = MergeSameTextMaxMillisecondsBetweenLines,
+                MaxMillisecondsDifference = MergeSameTimeMaxMillisecondsDifference,
                 MergeDialog = MergeSameTimeMergeDialog,
                 AutoBreak = MergeSameTimeAutoBreak,
             },
@@ -2756,6 +2855,15 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
                 ToStyle = AssaChangeStyleToStyle ?? string.Empty,
                 ImportedStyleHeader = AssaChangeStyleImportedStyleHeader ?? string.Empty,
                 TrimUnusedStyles = AssaChangeStyleTrimUnusedStyles,
+            },
+
+            AssaChangeStyleProperties = new BatchConvertConfig.AssaChangeStylePropertiesSettings
+            {
+                IsActive = activeFunctions.Contains(BatchConvertFunctionType.AssaChangeStyleProperties),
+                SetSpacing = AssaChangeStylePropertiesSetSpacing,
+                Spacing = AssaChangeStylePropertiesSpacing,
+                SetAlignment = AssaChangeStylePropertiesSetAlignment,
+                Alignment = SelectedAssaChangeStylePropertiesAlignment?.Code ?? "an2",
             },
 
             AssaEmbedFonts = new BatchConvertConfig.AssaEmbedFontsSettings
@@ -2880,13 +2988,18 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
 
         if (engineType == typeof(LlamaCppTranslate) || engineType == typeof(LlamaCppAdvancedTranslate))
         {
-            if (!string.IsNullOrEmpty(AutoTranslateUrl.Trim()))
+            // Only the external server takes its URL from the text box; in local mode the URL is
+            // owned by LlamaCppServerManager, which points LlamaCppApiUrl at the server it starts.
+            if (LlamaCppUseRemoteServer)
             {
-                Configuration.Settings.Tools.LlamaCppApiUrl = AutoTranslateUrl.Trim();
-            }
-            else if (!string.IsNullOrEmpty(Se.Settings.AutoTranslate.LlamaCppApiUrl))
-            {
-                Configuration.Settings.Tools.LlamaCppApiUrl = Se.Settings.AutoTranslate.LlamaCppApiUrl;
+                var apiUrl = AutoTranslateUrl.Trim();
+                if (string.IsNullOrEmpty(apiUrl))
+                {
+                    apiUrl = LlamaCppTranslate.DefaultUrl;
+                }
+
+                Configuration.Settings.Tools.LlamaCppApiUrl = apiUrl;
+                Se.Settings.AutoTranslate.LlamaCppApiUrl = apiUrl;
             }
         }
 
@@ -2901,6 +3014,21 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
             {
                 Configuration.Settings.Tools.OllamaModel = AutoTranslateModel.Trim();
                 Se.Settings.AutoTranslate.OllamaModel = AutoTranslateModel.Trim();
+            }
+        }
+
+        if (engineType == typeof(OllamaAdvancedTranslate))
+        {
+            // Both live in SE's own settings only - the advanced engine does not go through
+            // Configuration.Settings.Tools (that URL belongs to the classic Ollama engine).
+            if (!string.IsNullOrWhiteSpace(AutoTranslateUrl))
+            {
+                Se.Settings.AutoTranslate.OllamaAdvancedUrl = AutoTranslateUrl.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(AutoTranslateModel))
+            {
+                Se.Settings.AutoTranslate.OllamaAdvancedModel = AutoTranslateModel.Trim();
             }
         }
 
@@ -3076,6 +3204,22 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
         Se.Settings.AutoTranslate.LlamaCppModel = LlamaCppServerManager.GetModelPath(value.Model.FileName);
     }
 
+    private bool _suppressLlamaCppRemoteToggle;
+
+    partial void OnLlamaCppUseRemoteServerChanged(bool value)
+    {
+        if (_suppressLlamaCppRemoteToggle)
+        {
+            return;
+        }
+
+        Se.Settings.Tools.BatchConvert.LlamaCppUseRemoteServer = value;
+        if (SelectedAutoTranslator is LlamaCppTranslate or LlamaCppAdvancedTranslate)
+        {
+            PopulateLlamaCppModels();
+        }
+    }
+
     /// <summary>
     /// Fills the llama.cpp model combo and pre-selects the last-used model, or hides the combo when
     /// a remote server is configured (it serves whatever model it was started with). Re-filling the
@@ -3083,11 +3227,12 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
     /// </summary>
     private void PopulateLlamaCppModels()
     {
-        if (Se.Settings.AutoTranslate.LlamaCppUseRemoteServer)
+        if (LlamaCppUseRemoteServer)
         {
-            // Nothing local to pick or install - the remote server owns both.
+            // Nothing local to pick or install - the remote server owns both; the user just edits the URL.
             LlamaCppModelComboIsVisible = false;
             LlamaCppEngineSettingsButtonIsVisible = false;
+            AutoTranslateUrlIsVisible = true;
             LlamaCppModels.Clear();
             SelectedLlamaCppModel = null;
             return;
@@ -3095,6 +3240,7 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
 
         LlamaCppModelComboIsVisible = true;
         LlamaCppEngineSettingsButtonIsVisible = true;
+        AutoTranslateUrlIsVisible = false;
         var savedModelName = Path.GetFileName(Se.Settings.AutoTranslate.LlamaCppModel ?? string.Empty);
         SelectedLlamaCppModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppModels, GetLlamaCppModelsForEngine(), savedModelName);
     }
@@ -3116,15 +3262,20 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
     {
         var engine = SelectedAutoTranslator;
 
-        AutoTranslateModelIsVisible = engine is OllamaTranslate;
+        AutoTranslateModelIsVisible = engine is OllamaTranslate or OllamaAdvancedTranslate;
         CrispAsrModelComboIsVisible = engine is CrispAsrMadladTranslate;
         // Both turned back on by PopulateLlamaCppModels for a local llama.cpp.
         LlamaCppModelComboIsVisible = false;
         LlamaCppEngineSettingsButtonIsVisible = false;
 
+        // Batch convert has its own local/external switch for llama.cpp (#14005), so checking
+        // "use external server" in the Auto-translate window no longer leaks into batch runs.
+        LlamaCppRemoteToggleIsVisible = engine is LlamaCppTranslate or LlamaCppAdvancedTranslate;
+
         // Batch size, context history and the synopsis/glossary/style prompt only exist on the
-        // advanced engine; they apply to local and remote llama-servers alike.
-        LlamaCppAdvancedButtonIsVisible = engine is LlamaCppAdvancedTranslate;
+        // advanced engines; they are shared settings, so the same window serves both llama.cpp
+        // (local or remote llama-server) and Ollama.
+        LlamaCppAdvancedButtonIsVisible = engine is LlamaCppAdvancedTranslate or OllamaAdvancedTranslate;
 
         // The regular llama.cpp engine has no advanced window - its prompt (and the shared
         // delay/max-bytes/merge settings) live in the translate settings dialog instead.
@@ -3150,6 +3301,18 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
             AutoTranslateModelIsVisible = true;
             AutoTranslateUrl = string.Empty;
             AutoTranslateUrlIsVisible = false;
+            AutoTranslateApiKey = string.Empty;
+            AutoTranslateApiKeyIsVisible = false;
+        }
+        else if (engine is OllamaAdvancedTranslate)
+        {
+            // Same installed-model list as the classic Ollama engine - only the endpoint differs
+            // (the OpenAI-compatible /v1/chat/completions, not the native /api/generate).
+            AutoTranslateModel = Se.Settings.AutoTranslate.OllamaAdvancedModel;
+            AutoTranslateModelBrowseIsVisible = true;
+            AutoTranslateModelIsVisible = true;
+            AutoTranslateUrl = Se.Settings.AutoTranslate.OllamaAdvancedUrl;
+            AutoTranslateUrlIsVisible = true;
             AutoTranslateApiKey = string.Empty;
             AutoTranslateApiKeyIsVisible = false;
         }
@@ -3179,12 +3342,14 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
             AutoTranslateModelBrowseIsVisible = false;
             AutoTranslateModelIsVisible = false;
             AutoTranslateUrl = Se.Settings.AutoTranslate.LlamaCppApiUrl;
-            AutoTranslateUrlIsVisible = true;
             AutoTranslateApiKey = string.Empty;
             AutoTranslateApiKeyIsVisible = false;
 
-            // A remote server serves whatever model it was started with, so there is nothing to pick
-            // here - same as in the Auto-translate window, which owns that toggle.
+            // Local vs. external server: the URL field is only shown for an external server, and a
+            // remote server serves whatever model it was started with, so the model combo hides.
+            _suppressLlamaCppRemoteToggle = true;
+            LlamaCppUseRemoteServer = Se.Settings.Tools.BatchConvert.LlamaCppUseRemoteServer;
+            _suppressLlamaCppRemoteToggle = false;
             PopulateLlamaCppModels();
         }
         else if (engine is NoLanguageLeftBehindServe)
@@ -3192,7 +3357,7 @@ public partial class BatchConvertViewModel : ObservableObject, IClosingCleanup
             AutoTranslateModel = string.Empty;
             AutoTranslateModelBrowseIsVisible = false;
             AutoTranslateModelIsVisible = false;
-            AutoTranslateUrl = Se.Settings.AutoTranslate.NnlbServeUrl;
+            AutoTranslateUrl = Se.Settings.AutoTranslate.NllbServeUrl;
             AutoTranslateUrlIsVisible = true;
             AutoTranslateApiKey = string.Empty;
             AutoTranslateApiKeyIsVisible = false;

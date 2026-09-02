@@ -196,7 +196,7 @@ public class BurnInWindow : Window
         };
         UpdateGrowAreas();
 
-        Activated += delegate { _comboBoxFontName?.Focus(); }; // initial focus on an input, not an action button - a focused button clicks on bare Space
+        UiUtil.FocusOnFirstActivation(this, () => { _comboBoxFontName?.Focus(); }); // initial focus on an input, not an action button - a focused button clicks on bare Space
         Loaded += (_, _) => vm.Loaded();
         KeyDown += (_, e) => vm.OnKeyDown(e);
 
@@ -576,8 +576,10 @@ public class BurnInWindow : Window
     private static Border MakeVideoSettingsView(BurnInViewModel vm)
     {
         var labelResolution = UiUtil.MakeLabel(Se.Language.General.Resolution);
+        var labelWidth = UiUtil.MakeLabel("W");
         var textBoxWidth = UiUtil.MakeNumericUpDownInt(0, 10_000, 0, 130, vm, nameof(vm.VideoWidth));
         var labelX = UiUtil.MakeLabel("x");
+        var labelHeight = UiUtil.MakeLabel("H");
         var textBoxHeight = UiUtil.MakeNumericUpDownInt(0, 10_000, 0, 130, vm, nameof(vm.VideoHeight));
         var buttonResolution = UiUtil.MakeButtonBrowse(vm.BrowseResolutionCommand, accessibleName: Se.Language.General.Resolution);
         var panelResolution = new StackPanel
@@ -586,8 +588,10 @@ public class BurnInWindow : Window
             Spacing = 5,
             Children =
             {
+                labelWidth,
                 textBoxWidth,
                 labelX,
+                labelHeight,
                 textBoxHeight,
                 buttonResolution,
             }

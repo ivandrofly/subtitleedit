@@ -31,8 +31,10 @@ public partial class AssaAttachmentsViewModel : ObservableObject
     [ObservableProperty] private bool _isCopyFontnameToClipboardVisible;
     [ObservableProperty] private bool _isDeleteVisible;
     [ObservableProperty] private bool _isDeleteAllVisible;
+    [ObservableProperty] private bool _isMoveVisible;
 
     public Window? Window { get; internal set; }
+    public TableView AttachmentGrid { get; set; }
     public bool OkPressed { get; private set; }
     public string Header { get; set; }
     public string Footer { get; set; }
@@ -60,6 +62,28 @@ public partial class AssaAttachmentsViewModel : ObservableObject
         Header = string.Empty;
         Footer = string.Empty;
         _subtitle = new Subtitle();
+        AttachmentGrid = new TableView();
+    }
+
+    [RelayCommand]
+    private void MoveUp() => MoveAttachments(ListMoveDirection.Up);
+
+    [RelayCommand]
+    private void MoveDown() => MoveAttachments(ListMoveDirection.Down);
+
+    [RelayCommand]
+    private void MoveToTop() => MoveAttachments(ListMoveDirection.Top);
+
+    [RelayCommand]
+    private void MoveToBottom() => MoveAttachments(ListMoveDirection.Bottom);
+
+    /// <summary>
+    /// Reorders the selected attachments, as in SE 4. The list order is not presentation-only -
+    /// it is the order the attachments are written back to the [Fonts]/[Graphics] sections on OK.
+    /// </summary>
+    private void MoveAttachments(ListMoveDirection direction)
+    {
+        TableViewExtras.MoveSelectedRows(AttachmentGrid, Attachments, direction);
     }
 
     [RelayCommand]
@@ -146,8 +170,12 @@ public partial class AssaAttachmentsViewModel : ObservableObject
             return;
         }
 
+        // Parse returns null when the picked file is not Advanced Sub Station Alpha (an empty
+        // file, a renamed .ssa, a broken header) - dereferencing it crashed the dialog.
         var subtitle = Subtitle.Parse(fileName, new AdvancedSubStationAlpha());
-        var attachments = ListAttachments(subtitle.Footer.SplitToLines() ?? []);
+        var attachments = subtitle == null
+            ? new List<AssaAttachmentItem>()
+            : ListAttachments(subtitle.Footer.SplitToLines() ?? []);
         if (attachments.Count == 0)
         {
             await MessageBox.Show(Window, Se.Language.General.Error, Se.Language.Assa.NoAttachmentsFound, MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -627,6 +655,7 @@ public partial class AssaAttachmentsViewModel : ObservableObject
     {
         IsDeleteAllVisible = Attachments.Count > 0;
         IsDeleteVisible = SelectedAttachment != null;
+        IsMoveVisible = Attachments.Count > 1 && AttachmentGrid.SelectedItems?.Count > 0;
     }
 
     internal void AttachmentsDataGridKeyDown(object? sender, KeyEventArgs e)
@@ -634,6 +663,30 @@ public partial class AssaAttachmentsViewModel : ObservableObject
         if (e.Key == Key.Delete && SelectedAttachment != null)
         {
             AttachmentRemove();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Ctrl+Up/Ctrl+Down reorder the selected attachments, as in SE 4. Tunneled, because the
+    /// ListBox underneath TableView handles Ctrl+Arrow itself (move focus without changing
+    /// the selection) and a bubbling handler would never see the key.
+    /// </summary>
+    internal void AttachmentsMoveKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyModifiers != KeyModifiers.Control || e.Source is TextBox)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Up)
+        {
+            MoveAttachments(ListMoveDirection.Up);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Down)
+        {
+            MoveAttachments(ListMoveDirection.Down);
             e.Handled = true;
         }
     }

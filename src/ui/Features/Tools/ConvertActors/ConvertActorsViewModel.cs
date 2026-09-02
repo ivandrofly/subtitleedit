@@ -141,38 +141,29 @@ public partial class ConvertActorsViewModel : ObservableObject, IClosingCleanup
 
             if (fromSquare && Contains(p.Text, '[', ']'))
             {
-                ProcessBracketActors(vm, p, '[', ']', converter, changeCasing, color, items, ref count);
+                var result = converter.FixActors(p, '[', ']', changeCasing, color);
+                AddConversion(vm, oldText, result, converter, items, ref count);
             }
             else if (fromParentheses && Contains(p.Text, '(', ')'))
             {
-                ProcessBracketActors(vm, p, '(', ')', converter, changeCasing, color, items, ref count);
+                var result = converter.FixActors(p, '(', ')', changeCasing, color);
+                AddConversion(vm, oldText, result, converter, items, ref count);
             }
             else if (fromColon && p.Text.Contains(':'))
             {
-                var newText = converter.FixActorsFromBeforeColon(p, ':', changeCasing, color);
-                if (newText != oldText)
-                {
-                    var updatedVm = new SubtitleLineViewModel(vm);
-                    updatedVm.Text = newText;
-                    items.Add(new ConvertActorsDisplayItem(vm) { NewText = newText, IsChecked = true, UpdatedViewModel = updatedVm });
-                    count++;
-                }
+                var result = converter.FixActorsFromBeforeColon(p, ':', changeCasing, color);
+                AddConversion(vm, oldText, result, converter, items, ref count);
             }
             else if (fromActor && !string.IsNullOrEmpty(p.Actor))
             {
-                var newText = converter.FixActorsFromActor(p, changeCasing, color);
-                if (newText != oldText)
-                {
-                    var updatedVm = new SubtitleLineViewModel(vm);
-                    updatedVm.Text = newText;
-                    items.Add(new ConvertActorsDisplayItem(vm) { NewText = newText, IsChecked = true, UpdatedViewModel = updatedVm });
-                    count++;
-                }
+                var result = converter.FixActorsFromActor(p, changeCasing, color);
+                AddConversion(vm, oldText, result, converter, items, ref count);
             }
         }
 
         var statusText = string.Format(Se.Language.Tools.ConvertActors.NumberOfConversionsX, count);
-        Dispatcher.UIThread.Post(() =>
+
+        void Apply()
         {
             Subtitles.Clear();
             foreach (var item in items)
@@ -181,35 +172,55 @@ public partial class ConvertActorsViewModel : ObservableObject, IClosingCleanup
             }
 
             StatusText = statusText;
-        });
+        }
+
+        // Apply inline when already on the UI thread so Ok() can refresh synchronously; posting
+        // unconditionally meant a refresh requested from Ok ran only after Ok had finished.
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Apply();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(Apply);
+        }
     }
 
-    private void ProcessBracketActors(
+    /// <summary>
+    /// Turns one converted paragraph into a preview row - plus a second row when converting to the
+    /// actor column split a two-speaker paragraph in two.
+    /// </summary>
+    private void AddConversion(
         SubtitleLineViewModel vm,
-        Paragraph p,
-        char startChar,
-        char endChar,
+        string oldText,
+        ActorConverterResult result,
         ActorConverter converter,
-        int? changeCasing,
-        SkiaSharp.SKColor? color,
         List<ConvertActorsDisplayItem> items,
         ref int count)
     {
-        var oldText = p.Text;
-        var result = converter.FixActors(p, startChar, endChar, changeCasing, color);
         if (result.Skip)
+        {
+            return;
+        }
+
+        var newText = result.Paragraph.Text;
+
+        // A row loaded from a format without actors has a null actor, the converter writes an empty
+        // string - not a change worth listing.
+        var newActor = result.Paragraph.Actor ?? string.Empty;
+        if (newText == oldText && newActor == (vm.Actor ?? string.Empty) && result.NextParagraph == null)
         {
             return;
         }
 
         var isChecked = result.Selected || !OnlyNames;
         var updatedVm = new SubtitleLineViewModel(vm);
-        updatedVm.Text = result.Paragraph.Text;
-        updatedVm.Actor = result.Paragraph.Actor;
+        updatedVm.Text = newText;
+        updatedVm.Actor = newActor;
 
         items.Add(new ConvertActorsDisplayItem(vm)
         {
-            NewText = result.Paragraph.Text,
+            NewText = newText,
             IsChecked = isChecked,
             UpdatedViewModel = updatedVm,
         });
@@ -219,7 +230,7 @@ public partial class ConvertActorsViewModel : ObservableObject, IClosingCleanup
         {
             var nextVm = new SubtitleLineViewModel(vm, generateNewId: true);
             nextVm.Text = result.NextParagraph.Text;
-            nextVm.Actor = result.NextParagraph.Actor;
+            nextVm.Actor = result.NextParagraph.Actor ?? string.Empty;
 
             items.Add(new ConvertActorsDisplayItem(vm)
             {
@@ -286,6 +297,16 @@ public partial class ConvertActorsViewModel : ObservableObject, IClosingCleanup
     [RelayCommand]
     private void Ok()
     {
+        // Apply what the CURRENT settings produce, not what the 500 ms preview timer last
+        // computed: clicking OK right after changing the from/to type, colour or casing applied
+        // the previous settings' conversions while SaveSettings persisted the new ones (and
+        // before the first tick it applied nothing at all). Every sibling dialog in this folder
+        // already does this.
+        if (_dirty)
+        {
+            UpdatePreview();
+        }
+
         var checkedChanges = Subtitles
             .Where(s => s.IsChecked && !s.IsNextParagraph)
             .ToDictionary(s => s.OriginalId, s => s);

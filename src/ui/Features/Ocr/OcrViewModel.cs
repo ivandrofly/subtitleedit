@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -114,6 +114,7 @@ public partial class OcrViewModel : ObservableObject
     [ObservableProperty] private bool _isTesseractVisible;
     [ObservableProperty] private bool _isBinaryImageCompareVisible;
     [ObservableProperty] private bool _isPaddleOcrVisible;
+    [ObservableProperty] private bool _isAppleVisionVisible;
     [ObservableProperty] private bool _isGoogleVisionVisible;
     [ObservableProperty] private bool _isGoogleLensVisible;
     [ObservableProperty] private bool _isMistralOcrVisible;
@@ -126,6 +127,8 @@ public partial class OcrViewModel : ObservableObject
     [ObservableProperty] private string _mistralApiKey;
     [ObservableProperty] private ObservableCollection<OcrLanguage> _googleVisionLanguages;
     [ObservableProperty] private OcrLanguage? _selectedGoogleVisionLanguage;
+    [ObservableProperty] private ObservableCollection<OcrLanguage2> _appleVisionLanguages;
+    [ObservableProperty] private OcrLanguage2? _selectedAppleVisionLanguage;
     [ObservableProperty] private ObservableCollection<OcrLanguage2> _googleLensLanguages;
     [ObservableProperty] private OcrLanguage2 _selectedGoogleLensLanguage;
     [ObservableProperty] private ObservableCollection<OcrLanguage2> _paddleOcrLanguages;
@@ -180,6 +183,9 @@ public partial class OcrViewModel : ObservableObject
     private Iso639Dash2LanguageCode? _sourceLanguageIso;
     private readonly INOcrCaseFixer _nOcrCaseFixer;
     private readonly IWindowService _windowService;
+
+    /// <summary>For the shared image-preview background menu item (#14328).</summary>
+    internal IWindowService WindowService => _windowService;
     private readonly IFileHelper _fileHelper;
     private readonly IFolderHelper _folderHelper;
     private readonly ISpellCheckManager _spellCheckManager;
@@ -258,6 +264,7 @@ public partial class OcrViewModel : ObservableObject
         GoogleVisionApiKey = string.Empty;
         MistralApiKey = string.Empty;
         GoogleVisionLanguages = new ObservableCollection<OcrLanguage>(GoogleVisionOcr.GetLanguages().OrderBy(p => p.ToString()));
+        AppleVisionLanguages = new ObservableCollection<OcrLanguage2>(AppleVisionOcr.GetLanguages().OrderBy(p => p.ToString()));
         GoogleLensLanguages = new ObservableCollection<OcrLanguage2>(GoogleLensOcr.GetLanguages().OrderBy(p => p.ToString()));
         SelectedGoogleLensLanguage = GoogleLensLanguages.FirstOrDefault(p => p.Code == "en") ?? GoogleLensLanguages.First();
         PaddleOcrLanguages = new ObservableCollection<OcrLanguage2>(PaddleOcr.GetLanguages().OrderBy(p => p.ToString()));
@@ -272,7 +279,7 @@ public partial class OcrViewModel : ObservableObject
         _binaryOcrAddHistoryManager = new BinaryOcrAddHistoryManager();
         _cancellationTokenSource = new CancellationTokenSource();
         TextBoxFontFamily = !string.IsNullOrEmpty(Se.Settings.Appearance.SubtitleTextBoxAndGridFontName)
-            ? new FontFamily(Se.Settings.Appearance.SubtitleTextBoxAndGridFontName)
+            ? FontFamilyHelper.Make(Se.Settings.Appearance.SubtitleTextBoxAndGridFontName)
             : FontFamily.Default;
         TextBoxFontSize = (decimal)Se.Settings.Appearance.SubtitleTextBoxFontSize;
         TextBoxFontWeight = Se.Settings.Appearance.SubtitleTextBoxFontBold ? FontWeight.Bold : FontWeight.Regular;
@@ -294,6 +301,11 @@ public partial class OcrViewModel : ObservableObject
                 SelectedOcrEngine = OcrEngines.First(p => p.Name == ocr.Engine);
             }
 
+            if (!string.IsNullOrEmpty(ocr.BinaryOcrDatabase) && ImageCompareDatabases.Contains(ocr.BinaryOcrDatabase))
+            {
+                SelectedImageCompareDatabase = ocr.BinaryOcrDatabase;
+            }
+
             if (!string.IsNullOrEmpty(ocr.NOcrDatabase) && NOcrDatabases.Contains(ocr.NOcrDatabase))
             {
                 SelectedNOcrDatabase = ocr.NOcrDatabase;
@@ -312,6 +324,7 @@ public partial class OcrViewModel : ObservableObject
             GoogleVisionApiKey = ocr.GoogleVisionApiKey;
             MistralApiKey = ocr.MistralApiKey;
             SelectedGoogleVisionLanguage = GoogleVisionLanguages.FirstOrDefault(p => p.Code == ocr.GoogleVisionLanguage);
+            SelectedAppleVisionLanguage = AppleVisionLanguages.FirstOrDefault(p => p.Code == ocr.AppleVisionLanguage);
             var paddleOcrLastLanguage = PaddleOcr.NormalizeLanguageCode(Se.Settings.Ocr.PaddleOcrLastLanguage);
             SelectedPaddleOcrLanguage = PaddleOcrLanguages.FirstOrDefault(p => p.Code == paddleOcrLastLanguage) ??
                                         PaddleOcrLanguages.FirstOrDefault(p => p.Code == "en") ??
@@ -323,7 +336,7 @@ public partial class OcrViewModel : ObservableObject
                 _textBoxFontNamePersisted = ocr.TextBoxFontName;
                 TextBoxFontSize = ocr.TextBoxFontSize;
                 TextBoxFontWeight = ocr.TextBoxFontBold ? FontWeight.Bold : FontWeight.Regular;
-                try { TextBoxFontFamily = new FontFamily(ocr.TextBoxFontName); }
+                try { TextBoxFontFamily = FontFamilyHelper.Make(ocr.TextBoxFontName); }
                 catch { /* ignored */ }
             }
 
@@ -342,6 +355,7 @@ public partial class OcrViewModel : ObservableObject
         var ocr = Se.Settings.Ocr;
         ocr.Engine = SelectedOcrEngine?.Name ?? "nOCR";
         ocr.NOcrDatabase = SelectedNOcrDatabase ?? "Latin";
+        ocr.BinaryOcrDatabase = SelectedImageCompareDatabase ?? "Latin";
         ocr.NOcrMaxWrongPixels = SelectedNOcrMaxWrongPixels;
         ocr.NOcrDrawUnknownText = NOcrDrawUnknownText;
         ocr.NOcrPixelsAreSpace = SelectedNOcrPixelsAreSpace;
@@ -360,6 +374,7 @@ public partial class OcrViewModel : ObservableObject
         ocr.GoogleVisionApiKey = GoogleVisionApiKey;
         ocr.MistralApiKey = MistralApiKey;
         ocr.GoogleVisionLanguage = SelectedGoogleVisionLanguage?.Code ?? "en";
+        ocr.AppleVisionLanguage = SelectedAppleVisionLanguage?.Code ?? ocr.AppleVisionLanguage;
         ocr.TesseractLastLanguage = SelectedTesseractDictionaryItem?.Code ?? "eng";
         ocr.TesseractEngineMode = SelectedTesseractEngineMode?.Oem ?? 3;
         ocr.DoFixOcrErrors = DoFixOcrErrors;
@@ -428,6 +443,23 @@ public partial class OcrViewModel : ObservableObject
     partial void OnSelectedPaddleOcrLanguageChanged(OcrLanguage2? value) => AutoSelectDictionaryForOcrLanguage(value?.Code);
     partial void OnSelectedGoogleLensLanguageChanged(OcrLanguage2 value) => AutoSelectDictionaryForOcrLanguage(value?.Code);
     partial void OnSelectedGoogleVisionLanguageChanged(OcrLanguage? value) => AutoSelectDictionaryForOcrLanguage(value?.Code);
+    partial void OnSelectedAppleVisionLanguageChanged(OcrLanguage2? value) => AutoSelectDictionaryForOcrLanguage(LanguagePartOf(value?.Code));
+
+    /// <summary>
+    /// The language part of a BCP-47 tag - "pt-BR" becomes "pt". Apple Vision names its
+    /// languages that way, while the dictionary and ISO lookups here are keyed on the bare
+    /// language code.
+    /// </summary>
+    private static string? LanguagePartOf(string? bcp47)
+    {
+        if (string.IsNullOrEmpty(bcp47))
+        {
+            return bcp47;
+        }
+
+        var dash = bcp47!.IndexOf('-');
+        return dash < 0 ? bcp47 : bcp47.Substring(0, dash);
+    }
     partial void OnSelectedOllamaLanguageChanged(string? value) => AutoSelectDictionaryForOcrLanguage(Iso639Dash2LanguageCode.GetTwoLetterCodeFromEnglishName(value ?? string.Empty));
 
     private void AutoSelectDictionaryForOcrLanguage(string? languageCode)
@@ -494,6 +526,12 @@ public partial class OcrViewModel : ObservableObject
         if (lensLanguage != null)
         {
             SelectedGoogleLensLanguage = lensLanguage;
+        }
+
+        var appleVisionLanguage = AppleVisionLanguages.FirstOrDefault(p => LanguagePartOf(p.Code) == iso.TwoLetterCode);
+        if (appleVisionLanguage != null)
+        {
+            SelectedAppleVisionLanguage = appleVisionLanguage;
         }
 
         var visionLanguage = GoogleVisionLanguages.FirstOrDefault(p => p.Code == iso.ThreeLetterCode || p.Code == iso.TwoLetterCode);
@@ -641,7 +679,7 @@ public partial class OcrViewModel : ObservableObject
 
         _textBoxFontIsCustom = true;
         _textBoxFontNamePersisted = result.SelectedFontName;
-        TextBoxFontFamily = new FontFamily(result.SelectedFontName);
+        TextBoxFontFamily = FontFamilyHelper.Make(result.SelectedFontName);
         TextBoxFontSize = result.FontSize;
         TextBoxFontWeight = result.IsFontBold ? FontWeight.Bold : FontWeight.Regular;
     }
@@ -1144,7 +1182,9 @@ public partial class OcrViewModel : ObservableObject
         nBmp.MakeTwoColor(200);
         nBmp.CropTop(0, new SKColor(0, 0, 0, 0));
         var letters =
-            NikseBitmapImageSplitter2.SplitBitmapToLettersNew(nBmp, SelectedNOcrPixelsAreSpace, false, true, _lineHeightTracker.GetMinLineHeight(), true, _lineHeightTracker.GetAverageLineHeight());
+            // The binary run splits with SelectedBinaryOcrPixelsAreSpace - inspecting with the
+            // nOCR value gave a different letter/space breakdown than the text being inspected.
+            NikseBitmapImageSplitter2.SplitBitmapToLettersNew(nBmp, SelectedBinaryOcrPixelsAreSpace, false, true, _lineHeightTracker.GetMinLineHeight(), true, _lineHeightTracker.GetAverageLineHeight());
         var matches = new List<BinaryOcrMatcher.CompareMatch?>();
         foreach (var splitterItem in letters)
         {
@@ -1444,7 +1484,7 @@ public partial class OcrViewModel : ObservableObject
         if (downloaded != null)
         {
             var selectName = string.IsNullOrEmpty(downloaded) ? model?.FileName : downloaded;
-            SelectedLlamaCppOcrModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppOcrModels, LlamaCppServerManager.OcrModels, selectName);
+            SelectedLlamaCppOcrModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppOcrModels, LlamaCppServerManager.GetAllOcrModels(), selectName);
         }
 
         RefreshLlamaCppOcrDots();
@@ -1488,7 +1528,7 @@ public partial class OcrViewModel : ObservableObject
         {
             var selectName = string.IsNullOrEmpty(downloaded) ? model?.FileName : downloaded;
             RefreshLlamaCppOcrDots();
-            SelectedLlamaCppOcrModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppOcrModels, LlamaCppServerManager.OcrModels, selectName);
+            SelectedLlamaCppOcrModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppOcrModels, LlamaCppServerManager.GetAllOcrModels(), selectName);
         }
     }
 
@@ -1573,7 +1613,7 @@ public partial class OcrViewModel : ObservableObject
             }
         }
 
-        SelectedLlamaCppOcrModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppOcrModels, LlamaCppServerManager.OcrModels, model.FileName);
+        SelectedLlamaCppOcrModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppOcrModels, LlamaCppServerManager.GetAllOcrModels(), model.FileName);
 
         try
         {
@@ -2452,13 +2492,17 @@ public partial class OcrViewModel : ObservableObject
         if (SelectedDictionary != null && DoFixOcrErrors && SelectedDictionary.Name != GetDictionaryNameNone())
         {
             var threeLetterCode = SelectedDictionary.GetThreeLetterCode();
-            var fixSubtitle = new Subtitle();
+            // Paragraphs share the OCR items' text as it is produced: this snapshot is taken
+            // before the run, when every text is still empty, and the fix engine keeps it for
+            // the whole run - so SkipAddLineEnding ("don't add a full stop when the next line
+            // continues in lowercase") always saw an empty next line and never fired.
+            _fixEngineSubtitle = new Subtitle();
             foreach (var ocrItem in OcrSubtitleItems)
             {
-                fixSubtitle.Paragraphs.Add(new Paragraph(new TimeCode(ocrItem.StartTime), new TimeCode(ocrItem.EndTime), ocrItem.Text));
+                _fixEngineSubtitle.Paragraphs.Add(new Paragraph(new TimeCode(ocrItem.StartTime), new TimeCode(ocrItem.EndTime), ocrItem.Text));
             }
 
-            _ocrFixEngine.Initialize(fixSubtitle, threeLetterCode, SelectedDictionary);
+            _ocrFixEngine.Initialize(_fixEngineSubtitle, threeLetterCode, SelectedDictionary);
         }
         else
         {
@@ -2661,6 +2705,10 @@ public partial class OcrViewModel : ObservableObject
         {
             RunGoogleVisionOcr(selectedIndices, _cancellationTokenSource.Token);
         }
+        else if (ocrEngine.EngineType == OcrEngineType.AppleVision)
+        {
+            RunAppleVisionOcr(selectedIndices, _cancellationTokenSource.Token);
+        }
         else if (ocrEngine.EngineType == OcrEngineType.GoogleLens)
         {
             if (Configuration.IsRunningOnWindows && !File.Exists(Path.Combine(Se.GoogleLensOcrFolder, GoogleLensOcr.ExeFileName)))
@@ -2801,6 +2849,21 @@ public partial class OcrViewModel : ObservableObject
                       "Note: paddlepaddle may not have a wheel for the very latest Python yet" + Environment.NewLine +
                       "(e.g. 3.14) - if the install fails, use a Python 3.11/3.12/3.13 environment." + Environment.NewLine +
                       "For a CUDA GPU build, see https://www.paddlepaddle.org.cn/en/install" + Environment.NewLine +
+                      Environment.NewLine +
+                      "Details:" + Environment.NewLine +
+                      error;
+        }
+        else if (engineType == OcrEngineType.PaddleOcrPython &&
+                 error.Contains("PP-OCRv6", StringComparison.Ordinal) &&
+                 error.Contains("is not registered on", StringComparison.OrdinalIgnoreCase))
+        {
+            // The downloaded models are PP-OCRv6 (PaddleOCR 3.7). PaddleX looks the model name
+            // up in a registry, so an older pip "paddleocr" fails with "`PP-OCRv6_small_rec`
+            // is not registered on BasePredictor" for every language v6 covers.
+            message = "Paddle OCR Python is too old for the downloaded models." + Environment.NewLine +
+                      Environment.NewLine +
+                      "The models are PP-OCRv6, which needs \"paddleocr\" 3.7 or newer:" + Environment.NewLine +
+                      "    python -m pip install --upgrade paddleocr" + Environment.NewLine +
                       Environment.NewLine +
                       "Details:" + Environment.NewLine +
                       error;
@@ -3284,6 +3347,14 @@ public partial class OcrViewModel : ObservableObject
                 {
                     item.Text = unItalicItem.Text;
                     item.FixResult = unItalicItem.FixResult;
+                    // Re-point the unknown words at the real grid item: they were built against
+                    // the throwaway clone, which is in no collection, so clicking one found
+                    // nothing (IndexOf -> -1) and deleting the line left it orphaned.
+                    foreach (var unknownWord in unItalicResultTemp.UnknownWords)
+                    {
+                        unknownWord.Item = item;
+                    }
+
                     ocrFixResultTemp = unItalicResultTemp;
                 }
             }
@@ -3534,6 +3605,14 @@ public partial class OcrViewModel : ObservableObject
                 {
                     item.Text = unItalicItem.Text;
                     item.FixResult = unItalicItem.FixResult;
+                    // Re-point the unknown words at the real grid item: they were built against
+                    // the throwaway clone, which is in no collection, so clicking one found
+                    // nothing (IndexOf -> -1) and deleting the line left it orphaned.
+                    foreach (var unknownWord in unItalicResultTemp.UnknownWords)
+                    {
+                        unknownWord.Item = item;
+                    }
+
                     ocrFixResultTemp = unItalicResultTemp;
                 }
             }
@@ -3754,8 +3833,11 @@ public partial class OcrViewModel : ObservableObject
             return;
         }
 
+        // WordIndex is an offset into the fixed line the OCR engine built, not into item.Text, and
+        // the two can differ in length (French spacing inserts a character per "!?:;"). The two
+        // branches below already bounds-check; this one did not, and threw out of the OCR run.
         var idx = unknownWord.Word.WordIndex;
-        if (item.Text.Substring(idx).StartsWith(unknownWord.Word.FixedWord))
+        if (idx >= 0 && idx <= item.Text.Length && item.Text.Substring(idx).StartsWith(unknownWord.Word.FixedWord))
         {
             item.Text = item.Text.Remove(idx, unknownWord.Word.FixedWord.Length).Insert(idx, word);
         }
@@ -3861,6 +3943,9 @@ public partial class OcrViewModel : ObservableObject
         return result;
     }
 
+    // The subtitle handed to the fix engine, kept in step with the text as it is produced.
+    private Subtitle? _fixEngineSubtitle;
+
     private void SetText(int i, OcrSubtitleItem item, OcrFixLineResultTemp resultTemp)
     {
         string text;
@@ -3885,6 +3970,13 @@ public partial class OcrViewModel : ObservableObject
 
         // The bound collections (UnknownWords/AllGuesses/AllFixes) must only be touched on the
         // UI thread, so the adds ride in the same coalesced update as the text.
+        // Keep the fix engine's view of the subtitle current so the next line's end-line rules
+        // can look ahead/behind at real text rather than the empty pre-run snapshot.
+        if (_fixEngineSubtitle != null && i >= 0 && i < _fixEngineSubtitle.Paragraphs.Count)
+        {
+            _fixEngineSubtitle.Paragraphs[i].Text = text;
+        }
+
         OcrUiUpdates.EnqueueUpdate(() =>
         {
             CurrentText = text;
@@ -4159,7 +4251,18 @@ public partial class OcrViewModel : ObservableObject
 
                     item.Text = text;
 
-                    OcrFixLineAndSetText(i, item);
+                    var unknownWordsFound = OcrFixLineAndSetText(i, item);
+
+                    // Same prompt Tesseract's loop runs - these engines discarded the unknown
+                    // words, so ticking "prompt for unknown words" did nothing for them.
+                    if (DoPromptForUnknownWords && unknownWordsFound.Count > 0)
+                    {
+                        var keepRunningAfterPrompt = await PromptForUnknownWordsAsync(i, item);
+                        if (!keepRunningAfterPrompt)
+                        {
+                            return;
+                        }
+                    }
                 }
 
                 if (processedCount >= 1 && !producedAnyText && !cancellationToken.IsCancellationRequested)
@@ -4258,7 +4361,18 @@ public partial class OcrViewModel : ObservableObject
 
                     item.Text = text;
 
-                    OcrFixLineAndSetText(i, item);
+                    var unknownWordsFound = OcrFixLineAndSetText(i, item);
+
+                    // Same prompt Tesseract's loop runs - these engines discarded the unknown
+                    // words, so ticking "prompt for unknown words" did nothing for them.
+                    if (DoPromptForUnknownWords && unknownWordsFound.Count > 0)
+                    {
+                        var keepRunningAfterPrompt = await PromptForUnknownWordsAsync(i, item);
+                        if (!keepRunningAfterPrompt)
+                        {
+                            return;
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -4358,7 +4472,18 @@ public partial class OcrViewModel : ObservableObject
                     var text = await engine.Ocr(bitmap, cancellationToken);
                     item.Text = text;
 
-                    OcrFixLineAndSetText(i, item);
+                    var unknownWordsFound = OcrFixLineAndSetText(i, item);
+
+                    // Same prompt Tesseract's loop runs - these engines discarded the unknown
+                    // words, so ticking "prompt for unknown words" did nothing for them.
+                    if (DoPromptForUnknownWords && unknownWordsFound.Count > 0)
+                    {
+                        var keepRunningAfterPrompt = await PromptForUnknownWordsAsync(i, item);
+                        if (!keepRunningAfterPrompt)
+                        {
+                            return;
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -4398,7 +4523,18 @@ public partial class OcrViewModel : ObservableObject
                     var text = await mistralOcr.Ocr(bitmap, SelectedOllamaLanguage ?? "English", cancellationToken);
                     item.Text = text;
 
-                    OcrFixLineAndSetText(i, item);
+                    var unknownWordsFound = OcrFixLineAndSetText(i, item);
+
+                    // Same prompt Tesseract's loop runs - these engines discarded the unknown
+                    // words, so ticking "prompt for unknown words" did nothing for them.
+                    if (DoPromptForUnknownWords && unknownWordsFound.Count > 0)
+                    {
+                        var keepRunningAfterPrompt = await PromptForUnknownWordsAsync(i, item);
+                        if (!keepRunningAfterPrompt)
+                        {
+                            return;
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -4437,7 +4573,18 @@ public partial class OcrViewModel : ObservableObject
                     var text = await engine.Ocr(bitmap, GoogleVisionApiKey, SelectedGoogleVisionLanguage?.Code ?? "en", cancellationToken);
                     item.Text = text;
 
-                    OcrFixLineAndSetText(i, item);
+                    var unknownWordsFound = OcrFixLineAndSetText(i, item);
+
+                    // Same prompt Tesseract's loop runs - these engines discarded the unknown
+                    // words, so ticking "prompt for unknown words" did nothing for them.
+                    if (DoPromptForUnknownWords && unknownWordsFound.Count > 0)
+                    {
+                        var keepRunningAfterPrompt = await PromptForUnknownWordsAsync(i, item);
+                        if (!keepRunningAfterPrompt)
+                        {
+                            return;
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -4448,6 +4595,56 @@ public partial class OcrViewModel : ObservableObject
                 PauseOcr();
             }
         });
+    }
+
+    private void RunAppleVisionOcr(List<int> selectedIndices, CancellationToken cancellationToken)
+    {
+        var languageCode = SelectedAppleVisionLanguage?.Code ?? string.Empty;
+
+        // async so the unknown-word prompt can be awaited, like every other engine loop
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                for (var processedIndex = 0; processedIndex < selectedIndices.Count; processedIndex++)
+                {
+                    var i = selectedIndices[processedIndex];
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    UpdateOcrProgress(processedIndex + 1, selectedIndices.Count);
+
+                    var item = OcrSubtitleItems[i];
+                    var bitmap = item.GetSkBitmap();
+
+                    OcrUiUpdates.EnqueueSelect(i);
+
+                    item.Text = AppleVisionOcr.Ocr(bitmap, languageCode, fast: false, cancellationToken);
+
+                    var unknownWordsFound = OcrFixLineAndSetText(i, item);
+
+                    // Same prompt Tesseract's loop runs - these engines discarded the unknown
+                    // words, so ticking "prompt for unknown words" did nothing for them.
+                    if (DoPromptForUnknownWords && unknownWordsFound.Count > 0)
+                    {
+                        var keepRunningAfterPrompt = await PromptForUnknownWordsAsync(i, item);
+                        if (!keepRunningAfterPrompt)
+                        {
+                            return;
+                        }
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                PauseOcr();
+            }
+        }, cancellationToken);
     }
 
     private async Task<bool> CheckAndDownloadTesseract()
@@ -4927,11 +5124,11 @@ public partial class OcrViewModel : ObservableObject
         AutoDetectSourceLanguage();
     }
 
-    internal void Initialize(TransportStreamParser tsParser, List<TransportStreamSubtitle> subtitles, string fileName)
+    internal void Initialize(List<TransportStreamSubtitle> subtitles, string fileName)
     {
         _sourceFileName = fileName;
         Title = string.Format(Se.Language.Ocr.OcrX, fileName);
-        _ocrSubtitle = new OcrSubtitleTransportStream(tsParser, subtitles, fileName);
+        _ocrSubtitle = new OcrSubtitleTransportStream(subtitles);
         SetOcrSubtitleItems();
         AutoDetectSourceLanguage();
     }
@@ -4973,6 +5170,7 @@ public partial class OcrViewModel : ObservableObject
         IsCrispEmbedVisible = et == OcrEngineType.CrispEmbed;
         IsTesseractVisible = et == OcrEngineType.Tesseract;
         IsPaddleOcrVisible = et == OcrEngineType.PaddleOcrStandalone || et == OcrEngineType.PaddleOcrPython;
+        IsAppleVisionVisible = et == OcrEngineType.AppleVision;
         IsGoogleVisionVisible = et == OcrEngineType.GoogleVision;
         IsGoogleLensVisible = et == OcrEngineType.GoogleLens || et == OcrEngineType.GoogleLensSharp;
         IsMistralOcrVisible = et == OcrEngineType.Mistral;
@@ -5021,6 +5219,19 @@ public partial class OcrViewModel : ObservableObject
             }
         }
 
+        if (IsAppleVisionVisible)
+        {
+            if (SelectedAppleVisionLanguage == null)
+            {
+                // Vision's tags are BCP-47 ("en-US", "pt-BR"), so match the source language on
+                // the part before the region rather than on the whole tag.
+                SelectedAppleVisionLanguage =
+                    AppleVisionLanguages.FirstOrDefault(p => _sourceLanguageIso != null && LanguagePartOf(p.Code) == _sourceLanguageIso.TwoLetterCode) ??
+                    AppleVisionLanguages.FirstOrDefault(p => p.Code == "en-US") ??
+                    AppleVisionLanguages.FirstOrDefault();
+            }
+        }
+
         if (IsGoogleVisionVisible)
         {
             if (SelectedGoogleVisionLanguage == null)
@@ -5033,7 +5244,7 @@ public partial class OcrViewModel : ObservableObject
         if (IsLlamaCppVisible && LlamaCppOcrModels.Count == 0)
         {
             var savedModelName = Path.GetFileName(Se.Settings.Ocr.LlamaCppOcrModel ?? string.Empty);
-            SelectedLlamaCppOcrModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppOcrModels, LlamaCppServerManager.OcrModels, savedModelName);
+            SelectedLlamaCppOcrModel = LlamaCppDownloadHelper.PopulateModels(LlamaCppOcrModels, LlamaCppServerManager.GetAllOcrModels(), savedModelName);
             UpdateLlamaCppOcrServerButtonText();
         }
 

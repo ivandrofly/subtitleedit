@@ -152,6 +152,7 @@ public partial class SpeechToTextViewModel : ObservableObject
     private bool _crispAsrVadWasUsed;
     private bool _crispAsrVadSuppressed;
     private bool _loadedFromStdOut;
+    private SpeechToTextQualityReport? _qualityReport;
     private string? _videoFileName;
     private string _audioFileName = string.Empty;
     private int _audioTrackNumber;
@@ -207,7 +208,7 @@ public partial class SpeechToTextViewModel : ObservableObject
     private List<AudioClip>? _audioClips;
     private bool _audioClipsAutoStart;
     private string _qwen3AsrOutputJsonPath = string.Empty;
-    private int? _qwen3AsrExitCode;
+    private int? _engineExitCode;
 
     private readonly IWindowService _windowService;
     private readonly IFileHelper _fileHelper;
@@ -252,6 +253,16 @@ public partial class SpeechToTextViewModel : ObservableObject
             (OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture == Architecture.X64))
         {
             Engines.Add(new WhisperEngineCTranslate2());
+        }
+
+        // Same platform/architecture support as the standalone build published at
+        // https://github.com/muaz978/subtitleedit-whisperx-standalone - only builds for
+        // Windows x64 (not ARM64, which would silently get a mismatched x64 binary).
+        if ((OperatingSystem.IsWindows() && RuntimeInformation.ProcessArchitecture == Architecture.X64) ||
+            (OperatingSystem.IsMacOS() && RuntimeInformation.ProcessArchitecture == Architecture.Arm64) ||
+            (OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture == Architecture.X64))
+        {
+            Engines.Add(new WhisperEngineWhisperX());
         }
 
         Engines.Add(new WhisperEngineOpenAi());
@@ -390,9 +401,26 @@ public partial class SpeechToTextViewModel : ObservableObject
         var engine = GetEffectiveSelectedEngine();
         engine.CommandLineParameter = Parameters;
         Se.Settings.Tools.AudioToText.WhisperChoice = engine.Choice;
-        Se.Settings.Tools.AudioToText.WhisperModel = SelectedModel?.Model.Name ?? string.Empty;
-        Se.Settings.Tools.AudioToText.WhisperLanguageCode = SelectedLanguage?.Code ?? string.Empty;
-        Se.Settings.Tools.AudioToText.CrispAsrForcedAligner = SelectedForcedAligner?.Choice ?? ForcedAlignerOption.BuiltInChoice;
+        // Keep the remembered model/language when the current engine simply doesn't show
+        // those pickers (online STT engines null them out): overwriting with empty strings
+        // lost the user's choice for good, so switching back fell to tiny/English.
+        if (SelectedModel != null || IsModelSelectionVisible)
+        {
+            Se.Settings.Tools.AudioToText.WhisperModel = SelectedModel?.Model.Name ?? string.Empty;
+        }
+
+        if (SelectedLanguage != null || IsLanguageSelectionVisible)
+        {
+            Se.Settings.Tools.AudioToText.WhisperLanguageCode = SelectedLanguage?.Code ?? string.Empty;
+        }
+        // Only write when this window actually has an aligner selected. SaveSettings runs on
+        // every EngineChanged, so with a non-CrispASR engine (SelectedForcedAligner == null) the
+        // "?? built-in" fallback overwrote the aligner the user had chosen in Import plain text >
+        // Forced aligner setup - the only place that reads this key back.
+        if (SelectedForcedAligner != null)
+        {
+            Se.Settings.Tools.AudioToText.CrispAsrForcedAligner = SelectedForcedAligner.Choice;
+        }
 
         Se.Settings.Tools.OpenAiCompatibleSttUrl = OpenAiCompatibleSttUrl ?? string.Empty;
         Se.Settings.Tools.OpenAiCompatibleSttApiKey = OpenAiCompatibleSttApiKey ?? string.Empty;
@@ -443,6 +471,7 @@ public partial class SpeechToTextViewModel : ObservableObject
             or WhisperChoice.ConstMe
             or WhisperChoice.PurfviewFasterWhisperXxl
             or WhisperChoice.CTranslate2
+            or WhisperChoice.WhisperX
             or WhisperChoice.OpenAi;
     }
 
@@ -515,7 +544,10 @@ public partial class SpeechToTextViewModel : ObservableObject
             ? ForcedAlignerOption.BuiltInChoice
             : (crispEngine is CrispAsrQwen3 or CrispAsrMega or CrispAsrFunAsrNano ? ForcedAlignerOption.Qwen3Choice : ForcedAlignerOption.CanaryCtcChoice);
 
-        var match = ForcedAligners.FirstOrDefault(p => p.Choice == preferredChoice)
+        // Prefer what was saved - otherwise this window could never restore the user's own pick
+        // either, since nothing here ever read the setting back.
+        var match = ForcedAligners.FirstOrDefault(p => p.Choice == Se.Settings.Tools.AudioToText.CrispAsrForcedAligner)
+                    ?? ForcedAligners.FirstOrDefault(p => p.Choice == preferredChoice)
                     ?? ForcedAligners.FirstOrDefault();
         if (!ReferenceEquals(SelectedForcedAligner, match))
         {
@@ -750,14 +782,15 @@ public partial class SpeechToTextViewModel : ObservableObject
             var settings = Se.Settings.Tools.AudioToText;
 
             // Grab the exit code before disposing - it is the key diagnostic when the engine
-            // dies without producing output (e.g. a Qwen3 ASR GPU/Vulkan crash, issue #12815).
+            // dies without producing output (a Qwen3 ASR GPU/Vulkan crash, issue #12815; a Crisp
+            // ASR build that needs CPU instructions this machine lacks, issue #14038).
             try
             {
-                _qwen3AsrExitCode = _whisperProcess.ExitCode;
+                _engineExitCode = _whisperProcess.ExitCode;
             }
             catch
             {
-                _qwen3AsrExitCode = null;
+                _engineExitCode = null;
             }
 
             _whisperProcess.Dispose();
@@ -788,9 +821,13 @@ public partial class SpeechToTextViewModel : ObservableObject
                         "The model is incomplete. Please download the full model.");
                     hasError = true;
                 }
-                else if (_unknownArgument && !string.IsNullOrEmpty(settings.WhisperCustomCommandLineArguments))
+                else if (_unknownArgument)
                 {
-                    await MessageBox.Show(Window!, $"Unknown argument: {settings.WhisperCustomCommandLineArguments}",
+                    // Report the parameters the engine actually ran with. This used to be
+                    // gated on a global setting nothing ever writes, so a mistyped flag made
+                    // the run fail with no message at all.
+                    var badArgs = GetEffectiveSelectedEngine()?.CommandLineParameter ?? string.Empty;
+                    await MessageBox.Show(Window!, $"Unknown argument: {badArgs}",
                         "Unknown argument. Please check the advanced settings.");
                     hasError = true;
                 }
@@ -878,6 +915,78 @@ public partial class SpeechToTextViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Windows terminates a process that executes an instruction its CPU does not implement with
+    /// STATUS_ILLEGAL_INSTRUCTION; Unix reports the SIGILL as 128+4.
+    /// </summary>
+    internal const int StatusIllegalInstruction = unchecked((int)0xC000001D);
+
+    /// <summary>The shell convention for a child killed by SIGILL (128 + SIGILL).</summary>
+    internal const int UnixSigill = 132;
+
+    /// <summary>
+    /// Explains a Crisp ASR run that produced nothing because the engine died, or null when the
+    /// exit code says it did not - an empty result with a clean exit has some other cause and the
+    /// generic message is the honest one.
+    ///
+    /// Worth spelling out because the failure is invisible: a process killed for an illegal
+    /// instruction never reaches stdout, so SE sees a well-behaved engine that simply produced no
+    /// subtitles and said so, which is all the user was told in #14038. The concrete case there
+    /// was the crispasr v0.8.29 GPU packages, built with AVX-512 against a CI runner that had it
+    /// (CrispASR #374) - every CPU without AVX-512 got this on the CUDA/Vulkan build while the CPU
+    /// build ran fine, so naming the installed package is most of the answer. That build flaw is
+    /// fixed from v0.8.30 (the current pin), but the message still earns its keep: a pre-AVX2 CPU
+    /// hits the same silent death on the AVX2 CPU package, and an install predating the pin bump
+    /// keeps the broken GPU binary until the user downloads the engine again.
+    /// </summary>
+    /// <param name="exitCode">The engine process exit code, or null when it could not be read.</param>
+    /// <param name="variant">
+    /// The installed Crisp ASR package ("cuda", "vulkan", "cpu", ...) as reported by
+    /// <see cref="DownloadHashManager.GetCrispAsrVariant"/>, or null when it is not known.
+    /// </param>
+    internal static string? DescribeCrispAsrCrash(int? exitCode, string? variant)
+    {
+        if (exitCode is null or 0)
+        {
+            return null;
+        }
+
+        var code = $"exit code {exitCode.Value} (0x{(uint)exitCode.Value:X8})";
+        if (exitCode.Value is not (StatusIllegalInstruction or UnixSigill))
+        {
+            return $"Crisp ASR crashed before producing any output ({code}).{Environment.NewLine}{Environment.NewLine}" +
+                   "Please check the tools log for engine output.";
+        }
+
+        var isGpuBuild = variant is "cuda" or "cuda13" or "vulkan" or "hip";
+        var advice = isGpuBuild
+            ? $"The installed \"{variant}\" package needs a newer CPU than this one. Download the speech to text " +
+              "engine again and choose the CPU build."
+            : "Download the speech to text engine again and choose the CPU (legacy) build, which targets the " +
+              "oldest CPUs.";
+
+        return $"Crisp ASR was stopped for using CPU instructions this computer does not have ({code}, " +
+               $"illegal instruction), so it never produced any output.{Environment.NewLine}{Environment.NewLine}" +
+               advice;
+    }
+
+    /// <summary>
+    /// The Crisp ASR package the user actually has installed, from the download sidecar. Best-effort:
+    /// this only sharpens a diagnostic message, so an unreadable sidecar is not worth failing over.
+    /// </summary>
+    private static string? TryGetCrispAsrVariant(ICrispAsrEngine engine)
+    {
+        try
+        {
+            var sidecar = DownloadHashManager.TryReadSidecar(engine.GetAndCreateWhisperFolder());
+            return sidecar == null ? null : DownloadHashManager.GetCrispAsrVariant(sidecar.Value.Key);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Re-runs a Crisp ASR job that produced nothing, this time without the VAD pass.
     ///
     /// SE forces --vad on for the Cohere and Mega backends because they otherwise write a
@@ -944,9 +1053,14 @@ public partial class SpeechToTextViewModel : ObservableObject
         var parameters = Parameters ?? string.Empty;
         if (parameters.Contains("--compute_type", StringComparison.OrdinalIgnoreCase))
         {
+            // Only the floating point types are worth naming: on the RTX 50 series - the cards
+            // this error shows up on most - every int8 variant fails with this exact cuBLAS
+            // error, so listing "int8" sent the user straight back to the same dialog
+            // (Purfview/whisper-standalone-win#403, OpenNMT/CTranslate2#1865).
             await MessageBox.Show(Window!, title,
                 cause + "The parameters already set \"--compute_type\" - try another value, " +
-                "such as \"float16\", \"int8\", or \"float32\".");
+                "such as \"float16\", \"float32\", or \"bfloat16\" - the \"int8\" types fail " +
+                "this way on many newer GPUs.");
             return;
         }
 
@@ -1017,7 +1131,7 @@ public partial class SpeechToTextViewModel : ObservableObject
         var jsonPath = _qwen3AsrOutputJsonPath;
         if (string.IsNullOrEmpty(jsonPath) || !File.Exists(jsonPath))
         {
-            var exitCode = _qwen3AsrExitCode;
+            var exitCode = _engineExitCode;
             var isVulkan = false;
             try
             {
@@ -1050,9 +1164,10 @@ public partial class SpeechToTextViewModel : ObservableObject
                     return;
                 }
 
-                if (_unknownArgument && !string.IsNullOrEmpty(settings.WhisperCustomCommandLineArguments))
+                if (_unknownArgument)
                 {
-                    await MessageBox.Show(Window!, $"Unknown argument: {settings.WhisperCustomCommandLineArguments}",
+                    var badArgs = GetEffectiveSelectedEngine()?.CommandLineParameter ?? string.Empty;
+                    await MessageBox.Show(Window!, $"Unknown argument: {badArgs}",
                         "Unknown argument. Please check the advanced settings.");
                 }
                 LogToConsole($"Speech to text: Could not find output JSON file ({exitCodeText}){Environment.NewLine}");
@@ -1251,7 +1366,7 @@ public partial class SpeechToTextViewModel : ObservableObject
                 await MessageBox.Show(Window!,
                     Se.Language.General.ConfigurationRequired,
                     configError ?? Se.Language.General.OpenAiCompatibleSttUrlMissing);
-                IsTranscribeEnabled = true;
+                FailCurrentOnlineSttJob();
             });
             return;
         }
@@ -1292,7 +1407,7 @@ public partial class SpeechToTextViewModel : ObservableObject
                 await MessageBox.Show(Window!,
                     Se.Language.General.TranscriptionError,
                     string.Format(Se.Language.General.OpenAiCompatibleSttUrlNotResponding, probeError));
-                IsTranscribeEnabled = true;
+                FailCurrentOnlineSttJob();
             });
             return;
         }
@@ -1397,7 +1512,7 @@ public partial class SpeechToTextViewModel : ObservableObject
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    IsTranscribeEnabled = true;
+                    FailCurrentOnlineSttJob();
                     HideProgressBar();
                 });
             }
@@ -1435,7 +1550,7 @@ public partial class SpeechToTextViewModel : ObservableObject
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 await MessageBox.Show(Window!, Se.Language.General.TranscriptionError, message);
-                IsTranscribeEnabled = true;
+                FailCurrentOnlineSttJob();
             });
         }
         catch (TimeoutException ex)
@@ -1477,7 +1592,7 @@ public partial class SpeechToTextViewModel : ObservableObject
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 await MessageBox.Show(Window!, Se.Language.General.TranscriptionError, $"{Se.Language.General.TranscriptionFailed}: {ex.Message}");
-                IsTranscribeEnabled = true;
+                FailCurrentOnlineSttJob();
             });
         }
         finally
@@ -1986,6 +2101,11 @@ public partial class SpeechToTextViewModel : ObservableObject
         var postProcessor = new SpeechToTextPostProcessor(DoTranslateToEnglish ? "en" : languageCode)
         {
             ParagraphMaxChars = Configuration.Settings.General.SubtitleLineMaximumLength * 2,
+            RemoveNonSpeechLines = Se.Settings.Tools.AudioToText.WhisperPostProcessingRemoveNonSpeechLines,
+            RemoveRepeatedLines = Se.Settings.Tools.AudioToText.WhisperPostProcessingRemoveRepeatedLines,
+            // The engine's own parameters, so word-highlighted output is left alone by the
+            // merge/split steps (they are stored per engine, not in one global setting).
+            EngineCommandLineArguments = GetEffectiveSelectedEngine()?.CommandLineParameter ?? string.Empty,
         };
 
         WavePeakData2? wavePeaks = null;
@@ -2013,6 +2133,11 @@ public partial class SpeechToTextViewModel : ObservableObject
             settings.WhisperPostProcessingChangeUnderlineToColor,
             settings.WhisperPostProcessingChangeUnderlineToColorColor.FromHexToColor()
             );
+
+        // Keep the report for MakeResult (shown once the run is done) and log a
+        // one-line summary so batch runs leave a trace too (issue #13973).
+        _qualityReport = postProcessor.QualityReport;
+        LogToConsole(_qualityReport.ToLogString());
 
         return transcript;
     }
@@ -2115,7 +2240,9 @@ public partial class SpeechToTextViewModel : ObservableObject
         _filesToDelete.Add(targetFile);
         try
         {
-            var process = GetFfmpegProcess(_videoFileName, _audioTrackNumber, targetFile);
+            // One ffmpeg per batch item; the sibling _whisperProcess is disposed, and the
+            // text-to-speech twin uses "using var" for the same call.
+            using var process = GetFfmpegProcess(_videoFileName, _audioTrackNumber, targetFile);
             if (process == null)
             {
                 return null;
@@ -2258,7 +2385,7 @@ public partial class SpeechToTextViewModel : ObservableObject
         return true;
     }
 
-    private static List<string> GetResultFileCandidates(string ext, string waveFileName, string videoFileName, string whisperFolder, ConcurrentQueue<string> outputText, string? sttTempFolder = null)
+    internal static List<string> GetResultFileCandidates(string ext, string waveFileName, string videoFileName, string whisperFolder, ConcurrentQueue<string> outputText, string? sttTempFolder = null)
     {
         var candidates = new List<string>
         {
@@ -2284,8 +2411,12 @@ public partial class SpeechToTextViewModel : ObservableObject
         {
             // A pre-extracted 16 kHz WAV skips extraction, so the engines' contained output lands
             // in the per-run folder under the USER'S file name - no other candidate covers that.
-            candidates.Add(Path.Combine(sttTempFolder, Path.GetFileNameWithoutExtension(videoFileName) + ext));
-            candidates.Add(Path.Combine(sttTempFolder, Path.GetFileNameWithoutExtension(waveFileName) + ext));
+            // The per-run folder is where SE told the engine to write, so it must be probed BEFORE
+            // the folder of the user's own file: with the wave-dir candidate first, a stale
+            // "<name>.srt" already sitting next to the user's WAV was picked up as the result and
+            // then deleted as one of SE's temp files.
+            candidates.Insert(0, Path.Combine(sttTempFolder, Path.GetFileNameWithoutExtension(waveFileName) + ext));
+            candidates.Insert(0, Path.Combine(sttTempFolder, Path.GetFileNameWithoutExtension(videoFileName) + ext));
         }
 
         if (!string.IsNullOrEmpty(whisperFolder))
@@ -2420,6 +2551,20 @@ public partial class SpeechToTextViewModel : ObservableObject
 
         var anyLinesTranscribed = transcribedSubtitle != null && transcribedSubtitle.Paragraphs.Count > 0;
 
+        // A crashed engine leaves the same empty result as a clean run that found no speech, and
+        // the exit code is the only thing that tells them apart (#14038). Resolved here rather than
+        // in the dialog branch below so a batch run - which returns before any of that - still
+        // records why the file came back empty.
+        string? crispAsrCrash = null;
+        if (!anyLinesTranscribed && GetEffectiveSelectedEngine() is ICrispAsrEngine crispAsrEngine)
+        {
+            crispAsrCrash = DescribeCrispAsrCrash(_engineExitCode, TryGetCrispAsrVariant(crispAsrEngine));
+            if (crispAsrCrash != null)
+            {
+                Se.WriteToolsLog(crispAsrCrash, true);
+            }
+        }
+
         if (_abort)
         {
             // User cancelled mid-run. Leave the dialog open so they can adjust
@@ -2456,6 +2601,7 @@ public partial class SpeechToTextViewModel : ObservableObject
             }
             else if (anyLinesTranscribed)
             {
+                await ShowQualityReport();
                 OkPressed = anyLinesTranscribed;
                 TranscribedSubtitle = transcribedSubtitle ?? new Subtitle();
                 Window?.Close();
@@ -2463,6 +2609,7 @@ public partial class SpeechToTextViewModel : ObservableObject
             else if (GetEffectiveSelectedEngine() is ICrispAsrEngine)
             {
                 await MessageBox.Show(Window!, "No transcription result",
+                    crispAsrCrash ??
                     "Crisp ASR finished without generating subtitles. Please check the tools log for engine output.");
 
                 if (Window != null)
@@ -2470,6 +2617,28 @@ public partial class SpeechToTextViewModel : ObservableObject
                     FileHelper.OpenFileWithDefaultProgram(Se.GetToolsLogFilePath());
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Tell the user what post-processing found (issue #13973) before the dialog
+    /// closes. Only for the single-file flow - batch runs log the summary instead.
+    /// </summary>
+    private async Task ShowQualityReport()
+    {
+        var report = _qualityReport;
+        _qualityReport = null;
+        if (report == null || !report.HasIssues || !Se.Settings.Tools.AudioToText.WhisperPostProcessingShowQualityReport || Window == null)
+        {
+            return;
+        }
+
+        var vm = await _windowService.ShowDialogAsync<SpeechToTextQualityReportWindow, SpeechToTextQualityReportViewModel>(
+            Window, viewModel => viewModel.Initialize(report));
+
+        if (vm.DoNotShowAgain)
+        {
+            Se.Settings.Tools.AudioToText.WhisperPostProcessingShowQualityReport = false;
         }
     }
 
@@ -2677,8 +2846,6 @@ public partial class SpeechToTextViewModel : ObservableObject
                model.Name == "distil-large-v3";
     }
 
-
-
     [RelayCommand]
     private void ShowWebLink()
     {
@@ -2830,6 +2997,13 @@ public partial class SpeechToTextViewModel : ObservableObject
             _ => "vulkan",
         };
 
+        if (crispVariant == "cuda")
+        {
+            // Upstream added a Windows CUDA 13 build alongside the CUDA 12 one in v0.8.31, so
+            // Windows now gets the same follow-up Linux has had since v0.8.30 (#14343).
+            return await PromptCrispAsrCudaVersionAsync();
+        }
+
         if (crispVariant == "cpu")
         {
             return await PromptCrispAsrCpuFlavorAsync();
@@ -2879,7 +3053,7 @@ public partial class SpeechToTextViewModel : ObservableObject
 
         if (answer == MessageBoxResult.Custom3)
         {
-            return await PromptCrispAsrLinuxCudaVersionAsync();
+            return await PromptCrispAsrCudaVersionAsync();
         }
 
         return answer switch
@@ -2892,10 +3066,11 @@ public partial class SpeechToTextViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Follow-up prompt after the user picks "CUDA" in the Linux CrispASR variant selector.
+    /// Follow-up prompt after the user picks "CUDA" in the CrispASR variant selector, on both
+    /// Windows and Linux - upstream ships a CUDA 12 and a CUDA 13 build for each.
     /// Returns "cuda" (CUDA 12 build) or "cuda13", or null when the user cancels.
     /// </summary>
-    private async Task<string?> PromptCrispAsrLinuxCudaVersionAsync()
+    private async Task<string?> PromptCrispAsrCudaVersionAsync()
     {
         var answer = await MessageBox.Show(
             Window!,
@@ -3083,6 +3258,9 @@ public partial class SpeechToTextViewModel : ObservableObject
                 viewModal.AddPeriods = Se.Settings.Tools.AudioToText.WhisperPostProcessingAddPeriods;
                 viewModal.MergeShortLines = Se.Settings.Tools.AudioToText.WhisperPostProcessingMergeLines;
                 viewModal.BreakSplitLongLines = Se.Settings.Tools.AudioToText.WhisperPostProcessingSplitLines;
+                viewModal.RemoveNonSpeechLines = Se.Settings.Tools.AudioToText.WhisperPostProcessingRemoveNonSpeechLines;
+                viewModal.RemoveRepeatedLines = Se.Settings.Tools.AudioToText.WhisperPostProcessingRemoveRepeatedLines;
+                viewModal.ShowQualityReport = Se.Settings.Tools.AudioToText.WhisperPostProcessingShowQualityReport;
                 viewModal.ChangeUnderlineToColor = Se.Settings.Tools.AudioToText.WhisperPostProcessingChangeUnderlineToColor;
                 viewModal.ChangeUnderlineToColorColor = Se.Settings.Tools.AudioToText.WhisperPostProcessingChangeUnderlineToColorColor.FromHexToColor();
             });
@@ -3096,11 +3274,13 @@ public partial class SpeechToTextViewModel : ObservableObject
             Se.Settings.Tools.AudioToText.WhisperPostProcessingAddPeriods = vm.AddPeriods;
             Se.Settings.Tools.AudioToText.WhisperPostProcessingMergeLines = vm.MergeShortLines;
             Se.Settings.Tools.AudioToText.WhisperPostProcessingSplitLines = vm.BreakSplitLongLines;
+            Se.Settings.Tools.AudioToText.WhisperPostProcessingRemoveNonSpeechLines = vm.RemoveNonSpeechLines;
+            Se.Settings.Tools.AudioToText.WhisperPostProcessingRemoveRepeatedLines = vm.RemoveRepeatedLines;
+            Se.Settings.Tools.AudioToText.WhisperPostProcessingShowQualityReport = vm.ShowQualityReport;
             Se.Settings.Tools.AudioToText.WhisperPostProcessingChangeUnderlineToColor = vm.ChangeUnderlineToColor;
             Se.Settings.Tools.AudioToText.WhisperPostProcessingChangeUnderlineToColorColor = vm.ChangeUnderlineToColorColor.FromColorToHex();
         }
     }
-
 
     [RelayCommand]
     private async Task DownloadModel()
@@ -3531,7 +3711,6 @@ public partial class SpeechToTextViewModel : ObservableObject
             });
         }
 
-
         _videoFileName = _jobItems[0].InputVideoFileName;
         _videoInfo.TotalMilliseconds = _jobItems[0].MediaInfo.Duration.TotalMilliseconds;
         _videoInfo.TotalSeconds = _jobItems[0].MediaInfo.Duration.TotalSeconds;
@@ -3551,17 +3730,43 @@ public partial class SpeechToTextViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Fails the online-STT job that is currently running. In batch mode the item is marked
+    /// failed and the batch moves on, the same contract the ffmpeg-failure path uses - every
+    /// online error path used to just re-enable the window, which stopped the batch dead at
+    /// that file with no item marked and no summary.
+    /// </summary>
+    private void FailCurrentOnlineSttJob()
+    {
+        if (IsBatchMode && !_abort)
+        {
+            if (_batchIndex >= 0 && _batchIndex < _jobItems.Count)
+            {
+                _jobItems[_batchIndex].Status = Se.Language.General.Error;
+            }
+
+            StartNext(null);
+            return;
+        }
+
+        IsTranscribeEnabled = true;
+    }
+
     [RelayCommand]
     private void Cancel()
     {
         if (!IsTranscribeEnabled)
         {
+            // Always set _abort, online engines included: during the audio-extraction phase
+            // _openAiCts does not exist yet (it is created once ffmpeg has exited), so
+            // cancelling did nothing at all and the upload started anyway. _abort is also
+            // what MakeResult checks to stop a whole batch rather than skip one item.
+            _abort = true;
             if (GetEffectiveSelectedEngine() is IOnlineSttEngine)
             {
                 _openAiCts?.Cancel();
-                return;
             }
-            _abort = true;
+
             return;
         }
 
@@ -3700,7 +3905,11 @@ public partial class SpeechToTextViewModel : ObservableObject
     /// stdout/stderr to <paramref name="dataReceivedHandler"/> when one is given.
     /// The working directory is the executable's folder.
     /// </summary>
-    private static Process StartEngineProcess(string executable, string arguments, DataReceivedEventHandler? dataReceivedHandler)
+    private static Process StartEngineProcess(
+        string executable,
+        string arguments,
+        DataReceivedEventHandler? dataReceivedHandler,
+        Action<ProcessStartInfo>? configureStartInfo = null)
     {
         var p = new Process
         {
@@ -3712,6 +3921,8 @@ public partial class SpeechToTextViewModel : ObservableObject
                 WorkingDirectory = Path.GetDirectoryName(executable),
             }
         };
+
+        configureStartInfo?.Invoke(p.StartInfo);
 
         if (dataReceivedHandler != null)
         {
@@ -3757,6 +3968,35 @@ public partial class SpeechToTextViewModel : ObservableObject
     }
 
     /// <summary>
+    /// WhisperX shells out to a real "ffmpeg" binary via subprocess for audio loading (it is not
+    /// bundled in the standalone build - see subtitleedit-whisperx-standalone's README). Puts
+    /// Subtitle Edit's own configured/bundled ffmpeg on PATH so WhisperX finds it without
+    /// requiring a separate ffmpeg install. When ffmpeg is not configured to an actual file
+    /// (e.g. still the bare "ffmpeg" fallback resolved through the system PATH), this leaves
+    /// PATH untouched - the child process falls back to the exact same system PATH resolution
+    /// Subtitle Edit's own ffmpeg calls would use in that situation.
+    /// </summary>
+    private static void AddFfmpegToPath(ProcessStartInfo startInfo)
+    {
+        var ffmpegLocation = FfmpegHelper.GetFfmpegLocation();
+        if (string.IsNullOrEmpty(ffmpegLocation) || !File.Exists(ffmpegLocation))
+        {
+            return;
+        }
+
+        var ffmpegDir = Path.GetDirectoryName(ffmpegLocation);
+        if (string.IsNullOrEmpty(ffmpegDir))
+        {
+            return;
+        }
+
+        var existingPath = ProcessEnvironmentHelper.GetOrNull(startInfo, "PATH");
+        startInfo.EnvironmentVariables["PATH"] = string.IsNullOrEmpty(existingPath)
+            ? ffmpegDir
+            : ffmpegDir + Path.PathSeparator + existingPath;
+    }
+
+    /// <summary>
     /// Engines that demux and decode the source media themselves, so they can be pointed at the
     /// user's original file instead of SE's extracted WAV: Purfview Faster-Whisper-XXL bundles
     /// ffmpeg, whisper-ctranslate2 bundles PyAV. Verified that the others cannot - whisper.cpp
@@ -3766,7 +4006,7 @@ public partial class SpeechToTextViewModel : ObservableObject
     private static bool CanEngineReadSourceFileDirectly(ISpeechToTextEngine engine)
     {
         return engine.Name == WhisperEnginePurfviewFasterWhisperXxl.StaticName ||
-               engine is WhisperEngineCTranslate2;
+               engine is WhisperEngineCTranslate2 or WhisperEngineWhisperX;
     }
 
     /// <summary>
@@ -3809,12 +4049,44 @@ public partial class SpeechToTextViewModel : ObservableObject
         DataReceivedEventHandler? dataReceivedHandler = null,
         string engineOutputFolder = "")
     {
+        if (engine is WhisperEngineWhisperX whisperX)
+        {
+            var exe = whisperX.GetExecutable();
+            var whisperXArgs = whisperX.CommandLineParameter;
+            var languageArgX = language.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : $"--language {language} ";
+            var taskArg = translate ? "--task translate " : string.Empty;
+            var outputDir = string.IsNullOrEmpty(engineOutputFolder)
+                ? GetSttTempFolder()
+                : engineOutputFolder;
+            var parametersX =
+                $"{languageArgX}--model \"{model}\" --output_format srt --output_dir \"{outputDir}\" " +
+                $"{taskArg}{whisperXArgs} \"{waveFileName}\"";
+
+            // The generic launch path is bypassed here, so repeat the two pieces of its setup a
+            // PyInstaller-frozen Python engine needs: the glibc 2.41+ executable-stack repair,
+            // and the Python UTF-8/unbuffered variables - without them Windows decodes piped
+            // output with the ANSI code page (mojibake, or a UnicodeEncodeError killing the run)
+            // and stdout block-buffers so the log sits empty until the process exits.
+            EnsureExecutableStackCleared(whisperX, whisperX.GetAndCreateWhisperFolder());
+
+            Se.WriteToolsLog($"{exe} {parametersX}");
+            return StartEngineProcess(exe, parametersX, dataReceivedHandler, startInfo =>
+            {
+                AddFfmpegToPath(startInfo);
+                startInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+                startInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
+                startInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+            });
+        }
+
         if (engine is Qwen3AsrCppEngine qwen3Asr)
         {
             var exe = qwen3Asr.GetExecutable();
             var alignerModel = qwen3Asr.ForcedAlignerModel;
             _qwen3AsrOutputJsonPath = Path.Combine(Path.GetTempPath(), $"qwen3_asr_{Guid.NewGuid():N}.json");
-            _qwen3AsrExitCode = null;
+            _engineExitCode = null;
             var qwen3ExtraArgs = engine.CommandLineParameter;
 
             var qwen3Params = string.IsNullOrWhiteSpace(qwen3ExtraArgs)
@@ -4074,9 +4346,9 @@ public partial class SpeechToTextViewModel : ObservableObject
     private static bool _executableStackChecked;
 
     /// <summary>
-    /// Repairs an already-installed Purfview Faster-Whisper-XXL before launching it.
+    /// Repairs an already-installed Purfview Faster-Whisper-XXL or WhisperX before launching it.
     /// <para>
-    /// Its bundled libctranslate2 is built with PT_GNU_STACK = RWE, and glibc 2.41 stopped making
+    /// Both bundle a libctranslate2 built with PT_GNU_STACK = RWE, and glibc 2.41 stopped making
     /// the stack executable at dlopen time, so on a distro with glibc 2.41+ (Fedora 42, Arch,
     /// Ubuntu 25.10) the run dies immediately with "cannot enable executable stack as shared
     /// object requires: Invalid argument". The download path clears the flag on unpack, but
@@ -4090,7 +4362,7 @@ public partial class SpeechToTextViewModel : ObservableObject
         if (_executableStackChecked ||
             !OperatingSystem.IsLinux() ||
             string.IsNullOrEmpty(whisperFolder) ||
-            engine is not WhisperEnginePurfviewFasterWhisperXxl)
+            engine is not (WhisperEnginePurfviewFasterWhisperXxl or WhisperEngineWhisperX))
         {
             return;
         }

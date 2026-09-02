@@ -45,9 +45,11 @@ public class LanguageMain
     public string LineXTimingChanged { get; set; }
     public string LoadingWaveInfoFromCache { get; set; }
     public string ClickToGenerateWaveform { get; set; }
+    public string WaveformFfmpegNotFoundClickToSetUp { get; set; }
     public string NoTextInClipboard { get; set; }
     public string NumberOfLinesEvenlyDistributedX { get; set; }
     public string OneLineCopiedFromOriginal { get; set; }
+    public string OneLineCopiedToOriginal { get; set; }
     public string OneLineMerged { get; set; }
     public string OneLineSwitched { get; set; }
     public string OverwriteExistingCells { get; set; }
@@ -77,7 +79,9 @@ public class LanguageMain
     public string UnbreakHint { get; set; }
     public string UndoPerformed { get; set; }
     public string UndoPerformedXActionLeft { get; set; }
+    public string VideoAndWaveformPreviewTextX { get; set; }
     public string XLinesCopiedFromOriginal { get; set; }
+    public string XLinesCopiedToOriginal { get; set; }
     public string XLinesMerged { get; set; }
     public string XLinesSelectedOfY { get; set; }
     public string XLinesSwitched { get; set; }
@@ -94,6 +98,7 @@ public class LanguageMain
     public string OriginalTextReadOnly { get; set; }
     public string OriginalTextEditMode { get; set; }
     public string OriginalIsReadOnlyNotSaved { get; set; }
+    public string OriginalIsEmptyNotSaved { get; set; }
     public string OriginalIsReadOnlyReference { get; set; }
     public string AllowEditOfOriginalSubtitle { get; set; }
     public string ShowAllOriginalLinesX { get; set; }
@@ -134,10 +139,19 @@ public class LanguageMain
     public string ReplacedXOccurrences { get; set; }
     public string FfmpegDownloadedAndInstalledToX { get; set; }
     public string NothingToSave { get; set; }
+    public string FormatLimitWarningTitle { get; set; }
+    public string FormatLimitWarningXLinesExceedLimitsOfY { get; set; }
+    public string FormatLimitWarningMaxXCharactersPerLine { get; set; }
+    public string FormatLimitWarningMaxXLines { get; set; }
+    public string FormatLimitWarningTextWillBeRewrapped { get; set; }
+    public string FormatLimitWarningLinesX { get; set; }
+    public string FormatLimitWarningSaveAnyway { get; set; }
+    public string FormatLimitWarningDoNotShowAgain { get; set; }
     public string NothingToSaveOriginal { get; set; }
     public string LiveSpellCheckLanguageXLoaded { get; set; }
     public string DownloadFfmpegTitle { get; set; }
     public string DownloadFfmpegQuestion { get; set; }
+    public string FfmpegNotFoundInstallHint { get; set; }
     public string SelectCurrentSubtitleWhilePlayingOn  { get; set; }
     public string SelectCurrentSubtitleWhilePlayingOff  { get; set; }
     public string SetUpLikeSe4Question { get; set; }
@@ -189,9 +203,11 @@ public class LanguageMain
         LineXTimingChanged = "Line {0}: Timing changed";
         LoadingWaveInfoFromCache = "Loading wave info from cache...";
         ClickToGenerateWaveform = "Click to generate waveform";
+        WaveformFfmpegNotFoundClickToSetUp = "FFmpeg not found - click the waveform to set up FFmpeg and generate the waveform";
         NoTextInClipboard = "No text in clipboard";
         NumberOfLinesEvenlyDistributedX = "Evenly distributed {0} lines";
         OneLineCopiedFromOriginal = "One line copied from original subtitle";
+        OneLineCopiedToOriginal = "One line copied to original subtitle";
         OneLineMerged = "One line merged";
         OneLineSwitched = "One line switched";
         OverwriteExistingCells = "Overwrite existing cells";
@@ -221,7 +237,9 @@ public class LanguageMain
         UnbreakHint = "Unbreak selected lines";
         UndoPerformed = "Undo performed";
         UndoPerformedXActionLeft = "Undo performed (actions left: {0})";
+        VideoAndWaveformPreviewTextX = "Video/waveform preview: {0}";
         XLinesCopiedFromOriginal = "{0} lines copied from original subtitle";
+        XLinesCopiedToOriginal = "{0} lines copied to original subtitle";
         XLinesMerged = "{0} lines merged";
         XLinesSelectedOfY = "{0} lines selected of {1}";
         XLinesSwitched = "{0} lines switched";
@@ -238,6 +256,7 @@ public class LanguageMain
         OriginalTextReadOnly = "Original text (read-only)";
         OriginalTextEditMode = "Original text (edit mode)";
         OriginalIsReadOnlyNotSaved = "The original subtitle is a read-only reference and was not saved";
+        OriginalIsEmptyNotSaved = "The original subtitle has no text at all and was not saved";
         OriginalIsReadOnlyReference = "The original subtitle is open as a read-only reference";
         AllowEditOfOriginalSubtitle = "Allow edit of original subtitle";
         ShowAllOriginalLinesX = "Show all original lines ({0} have no match here)";
@@ -278,10 +297,19 @@ public class LanguageMain
         ReplacedXOccurrences = "Replaced {0} occurrences";
         FfmpegDownloadedAndInstalledToX = "ffmpeg downloaded and installed to {0}";
         NothingToSave = "Nothing to save";
+        FormatLimitWarningTitle = "Format limits exceeded";
+        FormatLimitWarningXLinesExceedLimitsOfY = "{0} subtitle(s) exceed the limits of the \"{1}\" format:";
+        FormatLimitWarningMaxXCharactersPerLine = "Max {0} characters per line";
+        FormatLimitWarningMaxXLines = "Max {0} lines per subtitle";
+        FormatLimitWarningTextWillBeRewrapped = "When saved, these subtitles will be re-wrapped or truncated to fit, so the file will not match what is shown here.";
+        FormatLimitWarningLinesX = "Lines: {0}";
+        FormatLimitWarningSaveAnyway = "Save anyway";
+        FormatLimitWarningDoNotShowAgain = "Do not show this warning again";
         NothingToSaveOriginal = "Nothing to save (original)";
         LiveSpellCheckLanguageXLoaded = "Live spell check language {0} loaded";
         DownloadFfmpegTitle = "Download FFmpeg?";
         DownloadFfmpegQuestion = "FFmpeg is required for playing online videos and for some video editing features.\n\nDownload FFmpeg now?";
+        FfmpegNotFoundInstallHint = "FFmpeg was not found.\n\nPlease install FFmpeg (e.g. via your package manager) so it is available on the PATH, or set the FFmpeg path in Options -> Settings.";
         SelectCurrentSubtitleWhilePlayingOn = "Select current subtitle while playing: ON";
         SelectCurrentSubtitleWhilePlayingOff = "Select current subtitle while playing: OFF";
         SetUpLikeSe4Question = "This will import Subtitle Edit 4 shortcuts and replace rules and apply the Subtitle Edit 4 theme, toolbar and waveform look.\n\nContinue?";

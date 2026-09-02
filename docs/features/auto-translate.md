@@ -12,7 +12,7 @@ Automatically translate subtitles using various translation engines and AI servi
 
 1. Open **Translate → Auto-translate...**
 2. Select a translation engine
-3. Select the source and target languages
+3. Select the source and target languages (the button between them swaps the two)
 4. Click **Translate** to start
 5. Review the translations in the grid
 6. Click **OK** to apply
@@ -22,14 +22,14 @@ Automatically translate subtitles using various translation engines and AI servi
 - **Google Translate V1 API** — Free Google Translate
 - **Google Translate V2 API** — Google Cloud Translation (requires API key)
 - **Bing Microsoft Translator** — Azure Cognitive Services (requires API key)
-- **DeepL V2 translate** — DeepL translation (requires API key)
+- **DeepL V2 translate** — DeepL translation (requires API key). A **Formality** dropdown — Default, More formal, Less formal, More formal (fall back to default), Less formal (fall back to default) — appears for target languages that support it
 - **LibreTranslate** — Open-source, self-hosted translation
 - **MyMemory Translate** — Free translation memory
 - **ChatGPT** — OpenAI AI translation (requires API key)
 - **LM Studio (local LLM)** — Local LLM translation
 - **Ollama (local LLM)** — Local LLM-based translation
 - **Ollama advanced (local LLM)** — Ollama translated in batches with surrounding context, a synopsis and a glossary; see [Advanced local engines](auto-translate-advanced.md)
-- **llama.cpp (local LLM)** — Server-managed local LLM translation; Subtitle Edit downloads llama.cpp and a curated model (TranslateGemma, Qwen or Aya Expanse) and runs a local `llama-server` for you. See [Using your own model](#llamacpp-using-your-own-model) to run a model we don't ship, such as TranslateGemma 27B
+- **llama.cpp (local LLM)** — Server-managed local LLM translation; Subtitle Edit downloads llama.cpp and a curated model (TranslateGemma, Gemma 4, Qwen, Aya Expanse, MiLMMT or Hy-MT2) and runs a local `llama-server` for you. See [Using your own model](#llamacpp-using-your-own-model) to run a model we don't ship, such as TranslateGemma 27B
 - **llama.cpp advanced (local LLM)** — The managed llama.cpp server translated in batches with surrounding context, a synopsis and a glossary; see [Advanced local engines](auto-translate-advanced.md)
 - **OpenAI Compatible API** — Generic engine for any service exposing an OpenAI-compatible `chat/completions` endpoint (vLLM, KoboldCpp, a llama.cpp server on another machine, cloud providers, ...); configure URL, model, prompt, and an optional API key
 - **Anthropic Claude** — AI translation (requires API key)
@@ -45,12 +45,12 @@ Automatically translate subtitles using various translation engines and AI servi
 - **thammegowda-nllb-serve** — Self-hosted NLLB (No Language Left Behind) server
 - **winstxnhdw-nllb-api** — NLLB (No Language Left Behind) API
 - **Baidu Translate** — Baidu translation (requires App ID and secret)
-- **CrispASR MADLAD** — Local MADLAD-based translation with downloadable models (shown with size and install status); also available in Batch Convert
+- **CrispASR MADLAD** — Local MADLAD-based translation with downloadable models (shown with size and install status); also available in Batch Convert. The language list is the 419 languages the MADLAD-400 model itself knows, so it is both longer and shorter than the usual one: it adds languages such as Iloko, Waray, Papiamento, Moroccan Arabic and Latin, and leaves out ones MADLAD cannot produce — including Cantonese, for which Google Translate, NLLB or any of the LLM engines are the alternatives. Quality varies a lot across that long tail — Google evaluated only about half of the languages the model claims
 
 ## llama.cpp: using your own model
 
 The models offered in the download list are deliberately kept small enough to run on an ordinary
-machine (around 8 GB or less). You are not limited to them — larger models such as TranslateGemma
+machine (mostly under 8 GB, the largest around 12 GB). You are not limited to them — larger models such as TranslateGemma
 27B work fine if your hardware can handle them.
 
 Two ways to use one:
@@ -70,8 +70,8 @@ choice and the jump to 27B buys less than the size difference suggests.
 
 ## Prompts: chat models and completion models
 
-Every local-LLM engine (LM Studio, Ollama, KoboldCpp, llama.cpp, OpenAI Compatible API) has a
-**prompt** you can edit. `{0}` is replaced with the source language and `{1}` with the target
+Every local-LLM engine (LM Studio, Ollama, llama.cpp, OpenAI Compatible API) has a
+**prompt** you can edit in the engine's Settings dialog (gear button). `{0}` is replaced with the source language and `{1}` with the target
 language, both as English names.
 
 By default the prompt is an instruction and Subtitle Edit appends the subtitle text after it — what
@@ -91,8 +91,11 @@ Translate this from {0} to {1}:
 
 The trailing `{1}:` cue is what makes such a model translate at all — without it, it tends to echo
 the source. Set the model's temperature to 0 where the engine offers it. Curated MiLMMT models in
-the llama.cpp engine's download list carry this prompt already; for LM Studio, KoboldCpp, Ollama or
-your own OpenAI-compatible server, paste it into the engine's prompt field.
+the llama.cpp engine's download list carry this prompt already; for LM Studio, Ollama or
+your own OpenAI-compatible server (vLLM, KoboldCpp, ...), paste it into the engine's prompt field.
+
+Headless runs take the same prompt via `seconv --translate-prompt:<text|file>` — see
+[Auto-translate (command line)](../reference/command-line.md#custom-prompt).
 
 ## Engine Configuration
 
@@ -101,6 +104,8 @@ Depending on the selected engine, you may need to provide:
 - **API Key** — Authentication key for cloud services
 - **API URL** — Custom endpoint URL (for self-hosted services)
 - **Model** — Specific model to use (for AI engines)
+
+The gear button opens the engine's **Settings** dialog with **Line merge**, **Delay in seconds between requests**, **Max bytes per request** and, for engines that have one, the **Prompt text** with a reset-to-default button.
 
 The **llama.cpp advanced** and **Ollama advanced** engines translate in batches with context, synopsis, and glossary support — see [Advanced Local Engines](auto-translate-advanced.md).
 

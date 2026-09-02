@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.Input;
+﻿using CommunityToolkit.Mvvm.Input;
 using Nikse.SubtitleEdit.Features.Main;
 using Nikse.SubtitleEdit.Features.Options.Shortcuts;
 using Nikse.SubtitleEdit.Logic.Config;
@@ -82,6 +82,53 @@ public static class ShortcutsMain
         }
     }
 
+    /// <summary>
+    /// Display name for a "surround with" slot: the configured tags when it has any, otherwise just
+    /// the slot number - the extra slots from #14232 ship unconfigured.
+    /// </summary>
+    public static string GetSurroundWithTitle(int slotNumber)
+    {
+        var left = Se.Settings.GetSurroundLeft(slotNumber);
+        var right = Se.Settings.GetSurroundRight(slotNumber);
+        return GetSurroundWithTitle(slotNumber, left, right);
+    }
+
+    public static string GetSurroundWithTitle(int slotNumber, string left, string right)
+    {
+        if (string.IsNullOrEmpty(left) && string.IsNullOrEmpty(right))
+        {
+            return string.Format(Se.Language.Options.Shortcuts.SurroundWithNumberX, slotNumber.ToString());
+        }
+
+        return string.Format(Se.Language.Options.Shortcuts.SurroundWithXY, left, right);
+    }
+
+    /// <summary>
+    /// Display name for a "search via" slot: the configured name when it has one, otherwise the
+    /// URL, otherwise just the slot number - the extra slots ship unconfigured.
+    /// </summary>
+    public static string GetSearchViaTitle(int slotNumber)
+    {
+        var name = Se.Settings.GetCustomSearchName(slotNumber);
+        var url = Se.Settings.GetCustomSearchUrl(slotNumber);
+        return GetSearchViaTitle(slotNumber, name, url);
+    }
+
+    public static string GetSearchViaTitle(int slotNumber, string name, string url)
+    {
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            return string.Format(Se.Language.Options.Shortcuts.SearchViaX, name);
+        }
+
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            return string.Format(Se.Language.Options.Shortcuts.SearchViaX, url);
+        }
+
+        return string.Format(Se.Language.Options.Shortcuts.SearchViaNumberX, slotNumber.ToString());
+    }
+
     private static Dictionary<string, string> BuildCommandTranslations()
     {
         return new Dictionary<string, string>
@@ -102,10 +149,15 @@ public static class ShortcutsMain
         { nameof(MainViewModel.DoAlignmentAn9Command), string.Format(Se.Language.General.AlignmentX, "an9")},
         { nameof(MainViewModel.AddOrEditBookmarkCommand), Se.Language.Options.Shortcuts.AddOrEditBookmark},
         { nameof(MainViewModel.ToggleBookmarkSelectedLinesNoTextCommand), Se.Language.Options.Shortcuts.ToggleBookmark},
+        { nameof(MainViewModel.ToggleForcedSelectedLinesCommand), Se.Language.Options.Shortcuts.ToggleForcedSelectedLines},
+        { nameof(MainViewModel.SaveForcedLinesAsCommand), Se.Language.General.SaveForcedLinesAs},
+        { nameof(MainViewModel.ToggleShowColumnForcedCommand), Se.Language.General.ShowForcedColumn},
         { nameof(MainViewModel.CopyTextFromOriginalToTranslationCommand), Se.Language.Options.Shortcuts.CopyTextFromOriginalSelectedLines},
+        { nameof(MainViewModel.CopyTextFromTranslationToOriginalCommand), Se.Language.Options.Shortcuts.CopyTextToOriginalSelectedLines},
         { nameof(MainViewModel.SwitchOriginalAndTranslationTextSelectedLinesCommand), Se.Language.Options.Shortcuts.SwitchOriginalAndTranslationSelectedLines},
         { nameof(MainViewModel.MergeOriginalIntoTranslationSelectedLinesCommand), Se.Language.Options.Shortcuts.MergeOriginalIntoTranslationSelectedLines},
         { nameof(MainViewModel.ListBookmarksCommand), Se.Language.General.BookmarksList},
+        { nameof(MainViewModel.ClearBookmarksCommand), Se.Language.Options.Shortcuts.ClearBookmarks},
         { nameof(MainViewModel.GoToNextBookmarkCommand), Se.Language.Options.Shortcuts.GoToNextBookmark},
         { nameof(MainViewModel.GoToPreviousBookmarkCommand), Se.Language.Options.Shortcuts.GoToPreviousBookmark},
         { nameof(MainViewModel.GoToNextEmptyLineCommand), Se.Language.Options.Shortcuts.GoToNextEmptyLine},
@@ -120,6 +172,7 @@ public static class ShortcutsMain
         { nameof(MainViewModel.FileOpenOriginalCommand), Se.Language.Options.Shortcuts.FileOpenOriginal },
         { nameof(MainViewModel.FileCloseOriginalCommand), Se.Language.Options.Shortcuts.FileCloseOriginal },
         { nameof(MainViewModel.ToggleTranslationModeCommand), Se.Language.Options.Shortcuts.GeneralToggleTranslationMode },
+        { nameof(MainViewModel.ToggleOriginalTextInPreviewCommand), Se.Language.Options.Shortcuts.GeneralToggleTranslationAndOriginalInPreviews },
         { nameof(MainViewModel.FileCloseTranslationCommand), Se.Language.Options.Shortcuts.FileCloseTranslation },
         { nameof(MainViewModel.CommandExitCommand), Se.Language.Options.Shortcuts.FileExit },
         { nameof(MainViewModel.CommandFileNewCommand), Se.Language.General.New },
@@ -215,6 +268,7 @@ public static class ShortcutsMain
         { nameof(MainViewModel.ShowGoToVideoPositionCommand), Se.Language.Options.Shortcuts.GeneralGoToVideoPosition },
         { nameof(MainViewModel.ToggleLinesItalicOrSelectedTextCommand), Se.Language.Options.Shortcuts.GeneralToggleItalic },
         { nameof(MainViewModel.ToggleLinesBoldOrSelectedTextCommand), Se.Language.Options.Shortcuts.GeneralToggleBold },
+        { nameof(MainViewModel.ToggleLinesUnderlineOrSelectedTextCommand), Se.Language.Options.Shortcuts.GeneralToggleUnderline },
 
         { nameof(MainViewModel.PlayCommand), Se.Language.General.Play },
         { nameof(MainViewModel.PlayNextCommand), Se.Language.General.PlayNext },
@@ -230,8 +284,10 @@ public static class ShortcutsMain
         { nameof(MainViewModel.CommandShowLayoutCommand), Se.Language.Options.Shortcuts.GeneralChooseLayout },
 
         { nameof(MainViewModel.GoToNextLineCommand), Se.Language.Options.Shortcuts.GeneralGoToNextSubtitle },
+        { nameof(MainViewModel.GoToNextSubtitlePlayTranslateCommand), Se.Language.Options.Shortcuts.GeneralGoToNextSubtitlePlayTranslate },
         { nameof(MainViewModel.GoToNextLineCursorAtEndCommand), Se.Language.Options.Shortcuts.GeneralGoToNextSubtitleCursorAtEnd },
         { nameof(MainViewModel.GoToPreviousLineCommand), Se.Language.Options.Shortcuts.GeneralGoToPrevSubtitle },
+        { nameof(MainViewModel.GoToPrevSubtitlePlayTranslateCommand), Se.Language.Options.Shortcuts.GeneralGoToPrevSubtitlePlayTranslate },
         { nameof(MainViewModel.GoToFirstLineCommand), Se.Language.Options.Shortcuts.GeneralGoToFirstLine },
         { nameof(MainViewModel.GoToLastLineCommand), Se.Language.Options.Shortcuts.GeneralGoToLastLine },
         { nameof(MainViewModel.GoToNextLineAndSetVideoPositionCommand), Se.Language.Options.Shortcuts.GoToNextLineAndSetVideoPosition },
@@ -246,6 +302,8 @@ public static class ShortcutsMain
         { nameof(MainViewModel.UnbreakCommand), Se.Language.General.Unbreak },
         { nameof(MainViewModel.AutoBreakCommand), Se.Language.General.AutoBreak },
         { nameof(MainViewModel.SplitCommand), Se.Language.General.SplitLine },
+        { nameof(MainViewModel.AssistedSplitCommand), Se.Language.General.AssistedSplit },
+        { nameof(MainViewModel.AssistedMoveCommand), Se.Language.General.AssistedMove },
         { nameof(MainViewModel.SplitAtVideoPositionCommand), Se.Language.General.SplitLineAtVideoPosition },
         { nameof(MainViewModel.SplitAtTextBoxCursorPositionCommand), Se.Language.General.SplitAtTextBoxCursorPosition },
         { nameof(MainViewModel.SplitAtVideoPositionAndTextBoxCursorPositionCommand), Se.Language.General.SplitLineAtVideoAndTextBoxPosition },
@@ -259,6 +317,8 @@ public static class ShortcutsMain
         { nameof(MainViewModel.TextBoxSelectAllCommand), Se.Language.Options.Shortcuts.TextBoxSelectAll },
         { nameof(MainViewModel.TextBoxRemoveAllFormattingCommand), Se.Language.Options.Shortcuts.TextBoxRemoveAllFormatting },
         { nameof(MainViewModel.TextBoxItalicCommand), Se.Language.Options.Shortcuts.TextBoxItalic },
+        { nameof(MainViewModel.TextBoxBoldCommand), Se.Language.Options.Shortcuts.TextBoxBold },
+        { nameof(MainViewModel.TextBoxUnderlineCommand), Se.Language.Options.Shortcuts.TextBoxUnderline },
 
         { nameof(MainViewModel.VideoOneFrameBackCommand), Se.Language.General.VideoOneFrameBack },
         { nameof(MainViewModel.VideoOneFrameForwardCommand),  Se.Language.General.VideoOneFrameForward },
@@ -314,6 +374,7 @@ public static class ShortcutsMain
         { nameof(MainViewModel.ShowWaveformSeekSilenceCommand),  Se.Language.Options.Shortcuts.SeekSilence },
         { nameof(MainViewModel.SeekSilenceBackCommand),  Se.Language.Options.Shortcuts.SeekSilenceBack },
         { nameof(MainViewModel.SeekSilenceForwardCommand),  Se.Language.Options.Shortcuts.SeekSilenceForward },
+        { nameof(MainViewModel.WaveformGuessStartCommand),  Se.Language.Options.Shortcuts.WaveformGuessStart },
         { nameof(MainViewModel.ShowShotChangesListCommand),  Se.Language.General.ShowShotChangesList },
         { nameof(MainViewModel.VideoUndockControlsCommand),  Se.Language.Options.Shortcuts.UndockVideoControls },
         { nameof(MainViewModel.VideoRedockControlsCommand),  Se.Language.Options.Shortcuts.RedockVideoControls },
@@ -364,6 +425,8 @@ public static class ShortcutsMain
         { nameof(MainViewModel.MoveFirstWordFromNextLineUpCurrentSubtitleCommand), Se.Language.Options.Shortcuts.MoveFirstWordFromNextLineUpCurrentSubtitle },
         { nameof(MainViewModel.MoveTextFromCursorToNextAndGoToNextCommand), Se.Language.Options.Shortcuts.MoveTextFromCursorToNextAndGoToNext },
         { nameof(MainViewModel.MoveTextFromCursorToNextAndGoToNextAndPlayCommand), Se.Language.Options.Shortcuts.MoveTextFromCursorToNextAndGoToNextAndPlay },
+        { nameof(MainViewModel.BreakAtFirstSpaceFromCursorCommand), Se.Language.Options.Shortcuts.BreakAtFirstSpaceFromCursor },
+        { nameof(MainViewModel.BreakAtFirstSpaceFromCursorAndGoToNextCommand), Se.Language.Options.Shortcuts.BreakAtFirstSpaceFromCursorAndGoToNext },
         { nameof(MainViewModel.ToggleFocusGridAndWaveformCommand), Se.Language.Options.Shortcuts.ToggleFocusGridAndWaveform },
         { nameof(MainViewModel.ToggleFocusTextBoxAndWaveformCommand), Se.Language.Options.Shortcuts.ToggleFocusTextBoxAndWaveform },
         { nameof(MainViewModel.ToggleFocusTextBoxAndSubtitleGridCommand), Se.Language.Options.Shortcuts.ToggleFocusTextBoxAndGrid },
@@ -420,9 +483,14 @@ public static class ShortcutsMain
         { nameof(MainViewModel.SetActor10Command), string.Format(Se.Language.Options.Shortcuts.SetActorXY, "10", Se.Settings.Actor10) },
         { nameof(MainViewModel.SetNewActorCommand), Se.Language.Options.Shortcuts.SetNewActor },
         { nameof(MainViewModel.RemoveActorCommand), Se.Language.General.Actor + " - " + Se.Language.General.Remove },
-        { nameof(MainViewModel.SurroundWith1Command), string.Format(Se.Language.Options.Shortcuts.SurroundWithXY,  Se.Settings.Surround1Left, Se.Settings.Surround1Right) },
-        { nameof(MainViewModel.SurroundWith2Command), string.Format(Se.Language.Options.Shortcuts.SurroundWithXY,  Se.Settings.Surround2Left, Se.Settings.Surround2Right) },
-        { nameof(MainViewModel.SurroundWith3Command), string.Format(Se.Language.Options.Shortcuts.SurroundWithXY,  Se.Settings.Surround3Left, Se.Settings.Surround3Right) },
+        { nameof(MainViewModel.SurroundWith1Command), GetSurroundWithTitle(1) },
+        { nameof(MainViewModel.SurroundWith2Command), GetSurroundWithTitle(2) },
+        { nameof(MainViewModel.SurroundWith3Command), GetSurroundWithTitle(3) },
+        { nameof(MainViewModel.SurroundWith4Command), GetSurroundWithTitle(4) },
+        { nameof(MainViewModel.SurroundWith5Command), GetSurroundWithTitle(5) },
+        { nameof(MainViewModel.SurroundWith6Command), GetSurroundWithTitle(6) },
+        { nameof(MainViewModel.SurroundWith7Command), GetSurroundWithTitle(7) },
+        { nameof(MainViewModel.SurroundWith8Command), GetSurroundWithTitle(8) },
         { nameof(MainViewModel.InsertLineBeforeCommand), Se.Language.General.InsertBefore },
         { nameof(MainViewModel.InsertLineAfterCommand), Se.Language.General.InsertAfter },
         { nameof(MainViewModel.WaveformInsertNewSelectionCommand), Se.Language.Options.Shortcuts.WaveformInsertNewSelection },
@@ -450,6 +518,11 @@ public static class ShortcutsMain
         { nameof(MainViewModel.SelectionToUpperCommand), Se.Language.Options.Shortcuts.SelectionToUpper },
         { nameof(MainViewModel.SelectionToSentenceCaseCommand), Se.Language.Options.Shortcuts.SelectionToSentenceCase },
         { nameof(MainViewModel.GoogleItCommand), Se.Language.Options.Shortcuts.GoogleIt },
+        { nameof(MainViewModel.CustomSearch1Command), GetSearchViaTitle(1) },
+        { nameof(MainViewModel.CustomSearch2Command), GetSearchViaTitle(2) },
+        { nameof(MainViewModel.CustomSearch3Command), GetSearchViaTitle(3) },
+        { nameof(MainViewModel.CustomSearch4Command), GetSearchViaTitle(4) },
+        { nameof(MainViewModel.CustomSearch5Command), GetSearchViaTitle(5) },
         { nameof(MainViewModel.ImportImageSubtitleForEditCommand), Se.Language.Options.Shortcuts.ImportImageSubtitleForEdit },
         { nameof(MainViewModel.ShowMediaInformationCommand), Se.Language.Options.Shortcuts.ShowMediaInformation },
         { nameof(MainViewModel.ShowSubtitleFormatPickerCommand), Se.Language.Options.Shortcuts.ChooseSubtitleFormat },
@@ -520,10 +593,15 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.DoAlignmentAn9Command, nameof(vm.DoAlignmentAn9Command), ShortcutCategory.SubtitleGridAndTextBox);
         AddShortcut(shortcuts, vm.AddOrEditBookmarkCommand, nameof(vm.AddOrEditBookmarkCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.ToggleBookmarkSelectedLinesNoTextCommand, nameof(vm.ToggleBookmarkSelectedLinesNoTextCommand), ShortcutCategory.General);
+        AddShortcut(shortcuts, vm.ToggleForcedSelectedLinesCommand, nameof(vm.ToggleForcedSelectedLinesCommand), ShortcutCategory.General);
+        AddShortcut(shortcuts, vm.SaveForcedLinesAsCommand, nameof(vm.SaveForcedLinesAsCommand), ShortcutCategory.General);
+        AddShortcut(shortcuts, vm.ToggleShowColumnForcedCommand, nameof(vm.ToggleShowColumnForcedCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.CopyTextFromOriginalToTranslationCommand, nameof(vm.CopyTextFromOriginalToTranslationCommand), ShortcutCategory.SubtitleGrid, ShortcutGroup.Translate);
+        AddShortcut(shortcuts, vm.CopyTextFromTranslationToOriginalCommand, nameof(vm.CopyTextFromTranslationToOriginalCommand), ShortcutCategory.SubtitleGrid, ShortcutGroup.Translate);
         AddShortcut(shortcuts, vm.SwitchOriginalAndTranslationTextSelectedLinesCommand, nameof(vm.SwitchOriginalAndTranslationTextSelectedLinesCommand), ShortcutCategory.SubtitleGrid, ShortcutGroup.Translate);
         AddShortcut(shortcuts, vm.MergeOriginalIntoTranslationSelectedLinesCommand, nameof(vm.MergeOriginalIntoTranslationSelectedLinesCommand), ShortcutCategory.SubtitleGrid, ShortcutGroup.Translate);
         AddShortcut(shortcuts, vm.ListBookmarksCommand, nameof(vm.ListBookmarksCommand), ShortcutCategory.General);
+        AddShortcut(shortcuts, vm.ClearBookmarksCommand, nameof(vm.ClearBookmarksCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.GoToNextBookmarkCommand, nameof(vm.GoToNextBookmarkCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.GoToPreviousBookmarkCommand, nameof(vm.GoToPreviousBookmarkCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.GoToNextEmptyLineCommand, nameof(vm.GoToNextEmptyLineCommand), ShortcutCategory.General);
@@ -551,6 +629,7 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.FileOpenOriginalCommand, nameof(vm.FileOpenOriginalCommand), ShortcutCategory.General, ShortcutGroup.File);
         AddShortcut(shortcuts, vm.FileCloseOriginalCommand, nameof(vm.FileCloseOriginalCommand), ShortcutCategory.General, ShortcutGroup.File);
         AddShortcut(shortcuts, vm.ToggleTranslationModeCommand, nameof(vm.ToggleTranslationModeCommand), ShortcutCategory.General, ShortcutGroup.Translate);
+        AddShortcut(shortcuts, vm.ToggleOriginalTextInPreviewCommand, nameof(vm.ToggleOriginalTextInPreviewCommand), ShortcutCategory.General, ShortcutGroup.Translate);
         AddShortcut(shortcuts, vm.FileCloseTranslationCommand, nameof(vm.FileCloseTranslationCommand), ShortcutCategory.General, ShortcutGroup.File);
         AddShortcut(shortcuts, vm.ExportBluRaySupCommand, nameof(vm.ExportBluRaySupCommand), ShortcutCategory.General, ShortcutGroup.File);
         AddShortcut(shortcuts, vm.ShowExportCustomTextFormatCommand, nameof(vm.ShowExportCustomTextFormatCommand), ShortcutCategory.General, ShortcutGroup.File);
@@ -573,6 +652,7 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.ShowGoToVideoPositionCommand, nameof(vm.ShowGoToVideoPositionCommand), ShortcutCategory.General, ShortcutGroup.Video);
         AddShortcut(shortcuts, vm.ToggleLinesItalicOrSelectedTextCommand, nameof(vm.ToggleLinesItalicOrSelectedTextCommand), ShortcutCategory.SubtitleGridAndTextBox);
         AddShortcut(shortcuts, vm.ToggleLinesBoldOrSelectedTextCommand, nameof(vm.ToggleLinesBoldOrSelectedTextCommand), ShortcutCategory.SubtitleGridAndTextBox);
+        AddShortcut(shortcuts, vm.ToggleLinesUnderlineOrSelectedTextCommand, nameof(vm.ToggleLinesUnderlineOrSelectedTextCommand), ShortcutCategory.SubtitleGridAndTextBox);
 
         AddShortcut(shortcuts, vm.PlayCommand, nameof(vm.PlayCommand), ShortcutCategory.General, ShortcutGroup.Video);
         AddShortcut(shortcuts, vm.PlayNextCommand, nameof(vm.PlayNextCommand), ShortcutCategory.General, ShortcutGroup.Video);
@@ -596,6 +676,8 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.GoToPreviousLineCommand, nameof(vm.GoToPreviousLineCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.GoToNextLineCommand, nameof(vm.GoToNextLineCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.GoToNextLineCursorAtEndCommand, nameof(vm.GoToNextLineCursorAtEndCommand), ShortcutCategory.General);
+        AddShortcut(shortcuts, vm.GoToPrevSubtitlePlayTranslateCommand, nameof(vm.GoToPrevSubtitlePlayTranslateCommand), ShortcutCategory.General, ShortcutGroup.Video);
+        AddShortcut(shortcuts, vm.GoToNextSubtitlePlayTranslateCommand, nameof(vm.GoToNextSubtitlePlayTranslateCommand), ShortcutCategory.General, ShortcutGroup.Video);
         AddShortcut(shortcuts, vm.GoToFirstLineCommand, nameof(vm.GoToFirstLineCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.GoToLastLineCommand, nameof(vm.GoToLastLineCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.GoToPreviousLineAndSetVideoPositionCommand, nameof(vm.GoToPreviousLineAndSetVideoPositionCommand), ShortcutCategory.General);
@@ -610,6 +692,8 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.UnbreakNoSpaceCommand, nameof(vm.UnbreakNoSpaceCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.AutoBreakCommand, nameof(vm.AutoBreakCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.SplitCommand, nameof(vm.SplitCommand), ShortcutCategory.General);
+        AddShortcut(shortcuts, vm.AssistedSplitCommand, nameof(vm.AssistedSplitCommand), ShortcutCategory.General);
+        AddShortcut(shortcuts, vm.AssistedMoveCommand, nameof(vm.AssistedMoveCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.SplitAtVideoPositionCommand, nameof(vm.SplitAtVideoPositionCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.SplitAtTextBoxCursorPositionCommand, nameof(vm.SplitAtTextBoxCursorPositionCommand), ShortcutCategory.TextBox);
         AddShortcut(shortcuts, vm.SplitAtVideoPositionAndTextBoxCursorPositionCommand, nameof(vm.SplitAtVideoPositionAndTextBoxCursorPositionCommand), ShortcutCategory.General);
@@ -623,6 +707,10 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.TextBoxSelectAllCommand, nameof(vm.TextBoxSelectAllCommand), ShortcutCategory.TextBox);
         AddShortcut(shortcuts, vm.TextBoxRemoveAllFormattingCommand, nameof(vm.TextBoxRemoveAllFormattingCommand), ShortcutCategory.TextBox);
         AddShortcut(shortcuts, vm.TextBoxItalicCommand, nameof(vm.TextBoxItalicCommand), ShortcutCategory.TextBox);
+        AddShortcut(shortcuts, vm.TextBoxBoldCommand, nameof(vm.TextBoxBoldCommand), ShortcutCategory.TextBox);
+        AddShortcut(shortcuts, vm.TextBoxUnderlineCommand, nameof(vm.TextBoxUnderlineCommand), ShortcutCategory.TextBox);
+        AddShortcut(shortcuts, vm.BreakAtFirstSpaceFromCursorCommand, nameof(vm.BreakAtFirstSpaceFromCursorCommand), ShortcutCategory.TextBox);
+        AddShortcut(shortcuts, vm.BreakAtFirstSpaceFromCursorAndGoToNextCommand, nameof(vm.BreakAtFirstSpaceFromCursorAndGoToNextCommand), ShortcutCategory.TextBox);
 
         // Tools
         AddShortcut(shortcuts, vm.ShowBridgeGapsCommand, nameof(vm.ShowBridgeGapsCommand), ShortcutCategory.General, ShortcutGroup.Tools);
@@ -721,6 +809,7 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.ShowWaveformSeekSilenceCommand, nameof(vm.ShowWaveformSeekSilenceCommand), ShortcutCategory.Waveform);
         AddShortcut(shortcuts, vm.SeekSilenceBackCommand, nameof(vm.SeekSilenceBackCommand), ShortcutCategory.Waveform);
         AddShortcut(shortcuts, vm.SeekSilenceForwardCommand, nameof(vm.SeekSilenceForwardCommand), ShortcutCategory.Waveform);
+        AddShortcut(shortcuts, vm.WaveformGuessStartCommand, nameof(vm.WaveformGuessStartCommand), ShortcutCategory.Waveform);
         AddShortcut(shortcuts, vm.GoToPreviousShotChangeCommand, nameof(vm.GoToPreviousShotChangeCommand), ShortcutCategory.General, ShortcutGroup.Video);
         AddShortcut(shortcuts, vm.GoToNextShotChangeCommand, nameof(vm.GoToNextShotChangeCommand), ShortcutCategory.General, ShortcutGroup.Video);
         AddShortcut(shortcuts, vm.ShowVideoChaptersCommand, nameof(vm.ShowVideoChaptersCommand), ShortcutCategory.General, ShortcutGroup.Video);
@@ -838,6 +927,11 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.SurroundWith1Command, nameof(vm.SurroundWith1Command), ShortcutCategory.SubtitleGridAndTextBox);
         AddShortcut(shortcuts, vm.SurroundWith2Command, nameof(vm.SurroundWith2Command), ShortcutCategory.SubtitleGridAndTextBox);
         AddShortcut(shortcuts, vm.SurroundWith3Command, nameof(vm.SurroundWith3Command), ShortcutCategory.SubtitleGridAndTextBox);
+        AddShortcut(shortcuts, vm.SurroundWith4Command, nameof(vm.SurroundWith4Command), ShortcutCategory.SubtitleGridAndTextBox);
+        AddShortcut(shortcuts, vm.SurroundWith5Command, nameof(vm.SurroundWith5Command), ShortcutCategory.SubtitleGridAndTextBox);
+        AddShortcut(shortcuts, vm.SurroundWith6Command, nameof(vm.SurroundWith6Command), ShortcutCategory.SubtitleGridAndTextBox);
+        AddShortcut(shortcuts, vm.SurroundWith7Command, nameof(vm.SurroundWith7Command), ShortcutCategory.SubtitleGridAndTextBox);
+        AddShortcut(shortcuts, vm.SurroundWith8Command, nameof(vm.SurroundWith8Command), ShortcutCategory.SubtitleGridAndTextBox);
         AddShortcut(shortcuts, vm.InsertLineBeforeCommand, nameof(vm.InsertLineBeforeCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.InsertLineAfterCommand, nameof(vm.InsertLineAfterCommand), ShortcutCategory.General);
         AddShortcut(shortcuts, vm.WaveformInsertNewSelectionCommand, nameof(vm.WaveformInsertNewSelectionCommand), ShortcutCategory.Waveform);
@@ -867,6 +961,11 @@ public static class ShortcutsMain
         AddShortcut(shortcuts, vm.SelectionToUpperCommand, nameof(vm.SelectionToUpperCommand), ShortcutCategory.TextBox);
         AddShortcut(shortcuts, vm.SelectionToSentenceCaseCommand, nameof(vm.SelectionToSentenceCaseCommand), ShortcutCategory.TextBox);
         AddShortcut(shortcuts, vm.GoogleItCommand, nameof(vm.GoogleItCommand), ShortcutCategory.TextBox, ShortcutGroup.Search);
+        AddShortcut(shortcuts, vm.CustomSearch1Command, nameof(vm.CustomSearch1Command), ShortcutCategory.TextBox, ShortcutGroup.Search);
+        AddShortcut(shortcuts, vm.CustomSearch2Command, nameof(vm.CustomSearch2Command), ShortcutCategory.TextBox, ShortcutGroup.Search);
+        AddShortcut(shortcuts, vm.CustomSearch3Command, nameof(vm.CustomSearch3Command), ShortcutCategory.TextBox, ShortcutGroup.Search);
+        AddShortcut(shortcuts, vm.CustomSearch4Command, nameof(vm.CustomSearch4Command), ShortcutCategory.TextBox, ShortcutGroup.Search);
+        AddShortcut(shortcuts, vm.CustomSearch5Command, nameof(vm.CustomSearch5Command), ShortcutCategory.TextBox, ShortcutGroup.Search);
         AddShortcut(shortcuts, vm.ImportImageSubtitleForEditCommand, nameof(vm.ImportImageSubtitleForEditCommand), ShortcutCategory.General, ShortcutGroup.File);
         AddShortcut(shortcuts, vm.ShowMediaInformationCommand, nameof(vm.ShowMediaInformationCommand), ShortcutCategory.General, ShortcutGroup.Video);
         AddShortcut(shortcuts, vm.ShowSubtitleFormatPickerCommand, nameof(vm.ShowSubtitleFormatPickerCommand), ShortcutCategory.General, ShortcutGroup.File);

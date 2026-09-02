@@ -16,6 +16,10 @@ Create a new empty subtitle.
 
 Create a new subtitle while keeping the currently loaded video.
 
+### New window
+
+Open another Subtitle Edit main window.
+
 ## Open
 
 Open an existing subtitle file.
@@ -49,9 +53,21 @@ Save the current subtitle to a new file or format.
 - **Menu:** File → Save as...
 - **Shortcut:** `Ctrl+Shift+S`
 
+## Save Forced Lines As
+
+Save only the lines marked as forced (see **Toggle forced** in the [subtitle grid](subtitle-grid.md#context-menu)) to a file.
+
 ## Close Original
 
 Close the secondary (original) subtitle file in translation mode.
+
+## Close Translation
+
+Shown while an editable original is open: discards the translation and makes the original the working subtitle (you are asked to save unsaved changes first). Not offered when the original is a read-only reference.
+
+## Format Properties
+
+Formats with their own settings (ASSA, EBU STL, PAC, ...) get a **<format> properties...** item here, opening the same dialog as the gear button next to the format combo box.
 
 ## Recent Files
 
@@ -77,6 +93,24 @@ See [Import Plain Text](import-plain-text.md) for details.
 
 Import image files and create subtitle entries from them.
 
+### Import image-based subtitle for OCR
+
+Read the subtitles out of an image-based file (Blu-ray `.sup`, VobSub `.sub`, `.ts`, BDN xml) and run [OCR](ocr.md) on them to get editable text.
+
+### Import image-based subtitle for edit
+
+Open an image-based subtitle in the [image-based subtitle editor](binary-edit.md) — moving, resizing and re-colouring the bitmaps — without converting them to text.
+
+### Import CSV/XLSX/ODS with custom columns
+
+Import a spreadsheet or delimited text file and choose which column holds the start time, end time, text, and so on.
+
+See [Import Spreadsheets](import-csv-xlsx.md) for details, including the column names that are recognised automatically when a spreadsheet is opened directly.
+
+### Import formatting
+
+Copy the formatting — italic/bold/underline, font tags and ASSA override tags — from another subtitle file onto the currently loaded lines, matched line by line. A warning is shown first when the two files do not have the same number of lines.
+
 ## Export
 
 ### Export as plain text
@@ -87,7 +121,9 @@ Export subtitle text without time codes.
 
 Export using a customizable text template. A template has a header, a per-subtitle text part, and a footer.
 
-Placeholders for the text part include `{start}`, `{end}`, `{text}`, `{number}`, `{number-1}`, `{duration}`, `{gap}`, `{actor}`, `{text-line-1}`, `{text-line-2}`, `{text-length}`, `{cps-period}`, `{bookmark}`, `{media-file-name}`, `{text-csv}`, and `{tab}`.
+Placeholders for the text part include `{start}`, `{end}`, `{text}`, `{number}`, `{number-1}`, `{duration}`, `{gap}`, `{actor}`, `{text-line-1}`, `{text-line-2}`, `{text-length}`, `{cps-period}`, `{bookmark}`, `{text-csv}`, and `{tab}`.
+
+The header and footer take `{title}`, `{#lines}`, `{tab}`, `{media-file-name}`, `{media-file-name-full}` and `{media-file-name-with-ext}`.
 
 The time code format is built from these letters (anything else is kept as-is):
 
@@ -121,11 +157,29 @@ Export subtitles in Cavena 890 format.
 
 ### Export image-based
 
-Export subtitles as images (BDN XML, VobSub, Blu-ray SUP, Final Cut Pro + image, IMSC 1.1 image profile, etc.).
+Export subtitles as images. The Export submenu lists: Blu-ray (sup), BDN/xml, BDN/xml 8-bit, IMSC 1.1 image profile, CapMaker Plus, Cheetah Caption, Cheetah Caption Old, Cavena 890, DVB teletext (Manzanita), D-Cinema interop/png, D-Cinema SMPTE 2014/png, EBU STL, DOST/png, DVD sup (MuxMan/Scenarist), Final Cut Pro + image, Images with time code, PAC (Screen Electronics), PAC Unicode (UniPac), VobSub (sub/idx) and WebVTT png — followed by **Custom text formats...** and **Plain text...**.
 
 **BDN/xml** writes 32-bit PNGs; **BDN/xml 8-bit** writes the same index.xml with 8-bit palette-indexed PNGs, which is what most Blu-ray authoring tools expect.
 
 The **IMSC 1.1 image profile** export writes a single self-contained TTML file with each subtitle embedded as a base64 PNG (`smpte:image` / `smpte:backgroundImage`), media timebase, and percentage-positioned regions — the standardized image-subtitle carriage for streaming and broadcast delivery.
+
+#### ASSA override tags
+
+Tags in the text are read rather than drawn as literal characters:
+
+| Tag | Effect on the exported image |
+|-----|------------------------------|
+| `{\an1}` - `{\an9}` | Places the subtitle, overriding the alignment chosen in the window |
+| `{\pos(x,y)}` | Positions the subtitle (coordinates are in the script's own resolution) |
+| `{\i1}`, `{\b1}`, `{\c&H..&}`, `{\fn..}`, `{\fs..}` | Italic, bold, colour, font and size |
+| `{\alpha&H80&}`, `{\1a}`, `{\3a}`, `{\4a}` | Transparency — all parts at once, or text, outline and shadow separately |
+| `{\3c&H..&}`, `{\4c&H..&}` | Outline and shadow colour, overriding the colours chosen in the window |
+| `{\bord2}`, `{\shad0}` | Outline and shadow width (in the script's own resolution) — `{\bord0}` turns the outline off |
+| `{\fad(in,out)}`, `{\fade(..)}` | Fade in/out — **Blu-ray SUP only** (see below) |
+
+Anything else is removed before rendering.
+
+**Fading (Blu-ray SUP).** A subtitle with `{\fad(400,400)}` is written the way a Blu-ray disc does it: the image is encoded once and the fade follows as palette updates, one per video frame, which cost about a kilobyte each instead of a whole new image. Long fades are sampled coarser so a single subtitle never adds more than 60 of them. The other image formats have no way to animate a subtitle and ignore the tag - the image is written fully opaque.
 
 <!-- Screenshot: Export image-based window -->
 ![Export Image Based](../screenshots/export-image-based.png)

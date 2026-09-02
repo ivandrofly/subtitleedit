@@ -6,7 +6,9 @@ using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nikse.SubtitleEdit.Core.Common;
 using Nikse.SubtitleEdit.Core.SubtitleFormats;
+using Nikse.SubtitleEdit.Logic;
 using Nikse.SubtitleEdit.Logic.Config;
 using System;
 using System.Globalization;
@@ -232,6 +234,15 @@ public class SecondsUpDown : TemplatedControl
         Value = val;
     }
 
+    /// <summary>
+    /// Re-renders the unchanged value after the frame-mode display setting changed - the text
+    /// otherwise only re-formats when the value itself changes.
+    /// </summary>
+    public void RefreshDisplayFormat()
+    {
+        UpdateText();
+    }
+
     private void UpdateText()
     {
         if (_textBox != null)
@@ -259,7 +270,12 @@ public class SecondsUpDown : TemplatedControl
                int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var frames))
             {
                 var totalMs = seconds * 1000 + SubtitleFormat.FramesToMilliseconds(frames);
-                return TimeSpan.FromMilliseconds(totalMs);
+                return TimeSpanExtensions.FromMillisecondsWholeMilliseconds(totalMs);
+            }
+
+            if (TryParseSecondsAndFramesWithoutSeparator(text.Trim(), out var separatorLessMs))
+            {
+                return TimeSpanExtensions.FromMillisecondsWholeMilliseconds(separatorLessMs);
             }
         }
         else
@@ -267,11 +283,57 @@ public class SecondsUpDown : TemplatedControl
             // Expect "seconds.ms" or "seconds,ms"
             if (double.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
             {
-                return TimeSpan.FromSeconds(seconds);
+                // Snap to a whole millisecond: TimeSpan.FromSeconds(0.82) is 819.9999 ms, which
+                // reads back as "0,820" here but as "0,819" in the grid, and ends the line a
+                // millisecond early (#14056).
+                return TimeSpanExtensions.FromSecondsWholeMilliseconds(seconds);
             }
         }
 
         return TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// Accepts a frame-mode duration typed without the colon, like the masked start/end time
+    /// fields do: "300" is three seconds and zero frames. One or two digits are read as whole
+    /// seconds ("5" is five seconds, not five frames), longer input has its last two digits
+    /// read as frames.
+    /// </summary>
+    private static bool TryParseSecondsAndFramesWithoutSeparator(string text, out double totalMilliseconds)
+    {
+        totalMilliseconds = 0;
+
+        if (text.Length == 0 || text.Length > 8)
+        {
+            return false;
+        }
+
+        foreach (var c in text)
+        {
+            if (!char.IsAsciiDigit(c))
+            {
+                return false;
+            }
+        }
+
+        var secondsText = text.Length <= 2 ? text : text.Substring(0, text.Length - 2);
+        var framesText = text.Length <= 2 ? "0" : text.Substring(text.Length - 2);
+        if (!int.TryParse(secondsText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds) ||
+            !int.TryParse(framesText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var frames))
+        {
+            return false;
+        }
+
+        // A frame number the frame rate cannot hold ("199" at 25 fps) would otherwise silently
+        // add a second - keep it inside the last second instead.
+        var maxFrames = (int)(Configuration.Settings.General.CurrentFrameRate - 0.01);
+        if (frames > maxFrames)
+        {
+            frames = maxFrames;
+        }
+
+        totalMilliseconds = seconds * 1000.0 + SubtitleFormat.FramesToMilliseconds(frames);
+        return true;
     }
 
     private static string FormatTime(TimeSpan ts)

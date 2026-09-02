@@ -29,11 +29,38 @@ namespace Nikse.SubtitleEdit.Features.Video.SpeechToText
 
         public int ParagraphMaxChars { get; set; }
 
+        /// <summary>
+        /// The command line the engine actually ran with, used to detect word-level output
+        /// (--highlight_words / --one_word) that merging and splitting would destroy.
+        /// SE 5 stores these per engine (engine.CommandLineParameter) - the old global
+        /// setting this used to read is never written, so the guard never fired.
+        /// </summary>
+        public string EngineCommandLineArguments { get; set; } = string.Empty;
+
         private const int AudioToTextLineMaxChars = 86;
         private const int AudioToTextLineMaxCharsJp = 32;
         private const int AudioToTextLineMaxCharsCn = 36;
 
         public string TwoLetterLanguageCode { get; }
+
+        /// <summary>
+        /// Drop lines that are only a sound/music description ("[Music]", "(waves)").
+        /// Whisper emits these on long stretches without speech (issue #13973).
+        /// </summary>
+        public bool RemoveNonSpeechLines { get; set; }
+
+        /// <summary>
+        /// Drop lines whose text repeats the previous line - the classic whisper
+        /// hallucination loop (issue #13973).
+        /// </summary>
+        public bool RemoveRepeatedLines { get; set; }
+
+        /// <summary>
+        /// What was found (and removed) during the last <see cref="Fix(Engine, Subtitle, bool, bool, bool, bool, bool, bool, bool, Color)"/> call.
+        /// Always populated, even when post-processing is off, so the user is told
+        /// when a transcription went badly instead of finding out later (issue #13973).
+        /// </summary>
+        public SpeechToTextQualityReport QualityReport { get; private set; } = new();
 
         public SpeechToTextPostProcessor(string twoLetterLanguageCode)
         {
@@ -77,10 +104,31 @@ namespace Nikse.SubtitleEdit.Features.Video.SpeechToText
             Color changeUnderlineToColorColor)
         {
             var subtitle = new Subtitle();
+            QualityReport = new SpeechToTextQualityReport();
 
+            // Input line number (1-based) of the last paragraph added to the output, so the
+            // "repeated" detail can name the line actually duplicated - which is not index
+            // when non-speech or repeated lines were dropped in between.
+            var lastKeptNumber = 0;
             for (var index = 0; index < input.Paragraphs.Count; index++)
             {
                 var paragraph = input.Paragraphs[index];
+
+                if (usePostProcessing && RemoveNonSpeechLines && SpeechToTextQualityReport.IsNonSpeechLine(paragraph.Text))
+                {
+                    QualityReport.Removed.Add(SpeechToTextQualityReport.MakeIssue(SpeechToTextQualityIssueType.NonSpeech, paragraph, index + 1, string.Empty));
+                    continue;
+                }
+
+                // Compare against the last line we kept, so a run of five identical
+                // lines collapses to one rather than to every other line.
+                var lastKept = subtitle.GetParagraphOrDefault(subtitle.Paragraphs.Count - 1);
+                if (usePostProcessing && RemoveRepeatedLines && lastKept != null && SpeechToTextQualityReport.IsRepeatOf(paragraph.Text, lastKept.Text))
+                {
+                    QualityReport.Removed.Add(SpeechToTextQualityReport.MakeIssue(SpeechToTextQualityIssueType.Repeated, paragraph, index + 1, $"= #{lastKeptNumber}"));
+                    continue;
+                }
+
                 if (usePostProcessing && engine == Engine.Vosk && TwoLetterLanguageCode == "en" && paragraph.Text == "the" && paragraph.EndTime.TotalSeconds - paragraph.StartTime.TotalSeconds > 1)
                 {
                     continue;
@@ -119,6 +167,7 @@ namespace Nikse.SubtitleEdit.Features.Video.SpeechToText
                 }
 
                 subtitle.Paragraphs.Add(paragraph);
+                lastKeptNumber = index + 1;
             }
 
             if (usePostProcessing && engine == Engine.Whisper && TwoLetterLanguageCode == "da")
@@ -134,6 +183,9 @@ namespace Nikse.SubtitleEdit.Features.Video.SpeechToText
                     paragraph.Text = FormattingReplacer.Replace(paragraph.Text, ChangeFormattingType.Underline, ChangeFormattingType.Color, changeUnderlineToColorColor, subtitle.OriginalFormat);
                 }
             }
+
+            var general = Configuration.Settings.General;
+            QualityReport.Analyze(postProcessed, general.SubtitleMinimumDisplayMilliseconds, general.SubtitleMaximumDisplayMilliseconds, general.SubtitleMaximumCharactersPerSeconds);
 
             return postProcessed;
         }
@@ -160,6 +212,11 @@ namespace Nikse.SubtitleEdit.Features.Video.SpeechToText
                 if (fixShortDuration)
                 {
                     subtitle = FixShortDuration(subtitle);
+
+                    // Engines hand back overlapping segments, and extending short
+                    // lines can create more - straighten them out so the result
+                    // does not arrive in the grid full of red overlaps (issue #13973).
+                    subtitle = FixOverlaps(subtitle);
                 }
 
                 if (splitLines && !IsNonStandardLineTerminationLanguage(TwoLetterLanguageCode) && AllowLineContentMove(engine))
@@ -181,19 +238,19 @@ namespace Nikse.SubtitleEdit.Features.Video.SpeechToText
             return subtitle;
         }
 
-        private static bool AllowLineContentMove(Engine engine)
+        private bool AllowLineContentMove(Engine engine)
         {
             if (engine != Engine.Whisper)
             {
                 return true;
             }
 
-            if (string.IsNullOrEmpty(Se.Settings.Tools.AudioToText.WhisperCustomCommandLineArguments))
+            if (string.IsNullOrEmpty(EngineCommandLineArguments))
             {
                 return true;
             }
 
-            var es = Se.Settings.Tools.AudioToText.WhisperCustomCommandLineArguments.ToLowerInvariant();
+            var es = EngineCommandLineArguments.ToLowerInvariant();
             return !es.Contains("--highlight_words", StringComparison.OrdinalIgnoreCase) &&
                    !es.Contains("-hw ", StringComparison.OrdinalIgnoreCase) &&
                    !es.Contains("-hw=true", StringComparison.OrdinalIgnoreCase) &&
@@ -579,6 +636,13 @@ namespace Nikse.SubtitleEdit.Features.Video.SpeechToText
         {
             var subtitle = new Subtitle(inputSubtitle);
             new FixShortDisplayTimes().Fix(subtitle, new EmptyFixCallback());
+            return subtitle;
+        }
+
+        private static Subtitle FixOverlaps(Subtitle inputSubtitle)
+        {
+            var subtitle = new Subtitle(inputSubtitle);
+            new FixOverlappingDisplayTimes().Fix(subtitle, new EmptyFixCallback());
             return subtitle;
         }
     }

@@ -1,7 +1,11 @@
 ﻿using Nikse.SubtitleEdit.Core.Common;
+using Nikse.SubtitleEdit.Core.Enums;
 using Nikse.SubtitleEdit.Core.Interfaces;
 using System;
 using System.Text.RegularExpressions;
+#if NET8_0_OR_GREATER
+using System.Buffers;
+#endif
 
 namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
 {
@@ -12,6 +16,16 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             public static string FixMissingSpace { get; set; } = "Fix missing space";
             public static string FixMissingSpaces { get; set; } = "Fix missing spaces";
         }
+
+        public FixType FixType => FixType.Spacing;
+
+        // FixSpaceAfter asks "is this character in that little set?" for every occurrence of the
+        // fix character in the file. Both sets used to be probed with
+        // `"...".Contains(text[i].ToString())`, which allocates a one-character string per probe.
+        private const string SpaceAfterSkipChars = " \r\n\":;()[]<>.؟!\u060C";
+#if NET8_0_OR_GREATER
+        private static readonly SearchValues<char> SpaceAfterSkipSearch = SearchValues.Create(SpaceAfterSkipChars);
+#endif
 
         private static readonly Regex FixMissingSpacesReComma = new Regex(@"[^\s\d],[^\s]", RegexOptions.Compiled);
         private static readonly Regex FixMissingSpacesRePeriod = new Regex(@"\p{Ll}\p{Ll}[.][\p{Ll}\p{Lu}]", RegexOptions.Compiled);
@@ -85,7 +99,13 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                         p.Text = p.Text.Replace(match.Value, match.Value[0] + ", " + match.Value[match.Value.Length - 1]);
                         callbacks.AddFixToListView(p, fixAction, oldText, p.Text);
                     }
-                    match = match.NextMatch();
+
+                    // Re-match against the UPDATED text as the "?", "!" and ":" loops do.
+                    // NextMatch() walks the pre-replacement string, so after the first fix every
+                    // later match.Index was one short and "p.Text[match.Index + 2]" read the
+                    // comma itself - defeating the expectedChars exclusion for every comma after
+                    // the first ("Well,I know,<i>maybe</i>." gained a space before the tag).
+                    match = FixMissingSpacesReComma.Match(p.Text, match.Index + 1);
                 }
 
                 var allowFix = callbacks.AllowFix(p, fixAction);
@@ -175,7 +195,12 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                             isMatchAbbreviation = true;
                         }
 
-                        if (match.Value.Equals("h.d", StringComparison.OrdinalIgnoreCase) && match.Index > 0 && p.Text.Substring(match.Index - 1, 4).Equals("ph.d", StringComparison.OrdinalIgnoreCase))
+                        // FixMissingSpacesRePeriod matches exactly four characters, so
+                        // match.Value can never equal the three-character "h.d" - the guard was
+                        // left over from an earlier three-character pattern and never fired, so
+                        // "his ph.d yesterday" was split into "ph. d". The leading letter is
+                        // inside the match now, so test it directly.
+                        if (match.Value.Equals("ph.d", StringComparison.OrdinalIgnoreCase))
                         {
                             isMatchAbbreviation = true;
                         }
@@ -188,7 +213,9 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                             callbacks.AddFixToListView(p, fixAction, oldText, p.Text);
                         }
                     }
-                    match = match.NextMatch();
+
+                    // Same as the comma loop above: continue over the updated text.
+                    match = FixMissingSpacesRePeriod.Match(p.Text, match.Index + 1);
                 }
 
                 if (!p.Text.StartsWith("--", StringComparison.Ordinal))
@@ -403,7 +430,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     {
                         skip = true;
                     }
-                    if (!skip && "0123456789".Contains(text[idx + 1].ToString()))
+
+                    if (!skip && CharUtils.IsAsciiDigit(text[idx + 1]))
                     {
                         skip = true;
                     }
@@ -414,7 +442,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                     }
                 }
 
-                if (!skip && !" \r\n\":;()[]<>.؟!\u060C".Contains(text[idx + 1].ToString()))
+                if (!skip && !IsSpaceAfterSkipChar(text[idx + 1]))
                 {
                     text = text.Insert(idx + 1, " ");
                 }
@@ -423,6 +451,15 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             }
 
             return text;
+        }
+
+        private static bool IsSpaceAfterSkipChar(char c)
+        {
+#if NET8_0_OR_GREATER
+            return SpaceAfterSkipSearch.Contains(c);
+#else
+            return SpaceAfterSkipChars.IndexOf(c) >= 0;
+#endif
         }
 
         private static string FixMissingSpaceBeforeAfterMusicQuotes(string input, char musicSymbol)

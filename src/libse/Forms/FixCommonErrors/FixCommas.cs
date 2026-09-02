@@ -2,6 +2,7 @@
 using Nikse.SubtitleEdit.Core.Interfaces;
 using System.Text.RegularExpressions;
 using Nikse.SubtitleEdit.Core.Common;
+using Nikse.SubtitleEdit.Core.Enums;
 
 namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
 {
@@ -11,6 +12,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
         {
             public static string FixCommas { get; set; } = "Fix commas";
         }
+
+        public FixType FixType => FixType.Punctuation;
 
         // Hoisted out of Fix() so each Fix() call reuses the same compiled NFA instead of
         // recompiling per-call. The Arabic variants below used to be re-allocated *per
@@ -48,11 +51,13 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                         s = CommaTripleEndOfLine.Replace(s, "$1...");
                         s = CommaWhiteSpaceBetween.Replace(s, "$1,$2");
 
-                        var match = CommaFollowedByLetter.Match(s);
-                        if (match.Success && (!(match.Index > 0 && s[match.Index-1] == 'ό' && s.Substring(match.Index).StartsWith(",τι", StringComparison.OrdinalIgnoreCase)) || callbacks.Language != "el"))
-                        {
-                            s = CommaFollowedByLetter.Replace(s, ", $1");
-                        }
+                        // Per-match evaluator so a protected Greek "ό,τι" elsewhere in the text
+                        // neither gets a space inserted nor shields genuine errors from the fix.
+                        var input = s;
+                        s = CommaFollowedByLetter.Replace(input, m =>
+                            callbacks.Language == "el" && m.Index > 0 && input[m.Index - 1] == 'ό' && input.Substring(m.Index).StartsWith(",τι", StringComparison.OrdinalIgnoreCase)
+                                ? m.Value
+                                : ", " + m.Groups[1].Value);
 
                         s = RemoveCommaBeforeSentenceEndingChar(s, ',');
                     }

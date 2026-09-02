@@ -49,17 +49,32 @@ namespace Nikse.SubtitleEdit.UiLogic.AutoTranslate
 
         public static string RemovePreamble(string original, string input)
         {
-            if (original.Contains(":") && input.IndexOf("<think>") < 0)
-            {
-                return input;
-            }
-
             var translation = input;
             var indexOfStartThink = translation.IndexOf("<think>");
             var indexOfEndThink = translation.IndexOf("</think>");
-            if (indexOfStartThink >= 0 && indexOfEndThink > indexOfStartThink)
+            if (indexOfStartThink >= 0)
             {
-                translation = translation.Remove(indexOfStartThink, indexOfEndThink - indexOfStartThink + 8).Trim();
+                if (indexOfEndThink > indexOfStartThink)
+                {
+                    translation = translation.Remove(indexOfStartThink, indexOfEndThink - indexOfStartThink + 8).Trim();
+                }
+                else
+                {
+                    // The model started reasoning but the response was cut off (hit its token
+                    // budget) before closing the tag, so everything after "<think>" is raw
+                    // internal monologue, not a translation. Empty triggers the caller's
+                    // retry-on-no-progress logic (DoAutoTranslate) instead of shipping it.
+                    return string.Empty;
+                }
+            }
+
+            // The colon guard has to be applied to the text left AFTER the think block is removed.
+            // It used to be "&&"-ed with "there is no <think>", so a reasoning model's answer
+            // skipped it entirely and PreambleRegex ate the real translation up to its first colon
+            // ("Anmerkung: Das ist wichtig." -> "this is important.").
+            if (original.Contains(':'))
+            {
+                return translation;
             }
 
             var match = PreambleRegex.Match(translation);

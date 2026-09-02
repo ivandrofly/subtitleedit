@@ -9,6 +9,7 @@ using Nikse.SubtitleEdit.Features.Main;
 using Nikse.SubtitleEdit.Logic;
 using Nikse.SubtitleEdit.Logic.Config;
 using Nikse.SubtitleEdit.Logic.Media;
+using Nikse.SubtitleEdit.Logic.ValueConverters;
 using SkiaSharp;
 using System;
 using System.Collections.Generic;
@@ -217,6 +218,11 @@ public class AudioVisualizer : Control
     public bool FocusOnMouseOver { get; set; } = true;
     public int WaveformHeightPercentage { get; set; } = 50;
 
+    // Draw the original text instead of the translation - "toggle translation and original in
+    // video/audio preview" (#14252). Only the main window sets it, and only while an original
+    // subtitle is loaded; the dialogs that host a waveform keep showing the text they were given.
+    public bool ShowOriginalText { get; set; }
+
     // Lets the wheel handler ask the host whether the video is playing, so a plain scroll in
     // "center video position" mode can turn into a seek that keeps the play-head centered
     // (#12864). Hosts without a video player (or that never set this) keep plain scrolling.
@@ -317,6 +323,14 @@ public class AudioVisualizer : Control
             {
                 _shotChanges = _shotChanges.Select(sc => Math.Round(sc /= 1.001, 3, MidpointRounding.AwayFromZero)).ToList();
             }
+
+            // The spectrogram is drawn from StartPositionSeconds / SampleDuration, and
+            // StartPositionSeconds is now SMPTE-compressed - so compress the column duration
+            // to match, or the two panels drift ~3.6 s apart per hour.
+            if (_spectrogram != null)
+            {
+                _spectrogram.SampleDuration /= 1.001;
+            }
         }
     }
 
@@ -375,6 +389,12 @@ public class AudioVisualizer : Control
     private static readonly Cursor _cursorSizeWestEast = new Cursor(StandardCursorType.SizeWestEast);
 
     private readonly List<SubtitleLineViewModel> _displayableParagraphs = new();
+
+    // The paragraph sets as they stood before the current LoadParagraphs, so it can tell whether
+    // anything it draws actually changed. Reused across calls, so the check allocates nothing.
+    private readonly List<SubtitleLineViewModel> _previousDisplayableParagraphs = new();
+    private readonly List<SubtitleLineViewModel> _previousSelectedParagraphs = new();
+
     private readonly IsSelectedHelper _isSelectedHelper = new();
     private bool _isCtrlDown;
     private bool _isMetaDown;
@@ -517,6 +537,23 @@ public class AudioVisualizer : Control
     public event ParagraphNullableEventHandler? OnPrimarySingleClicked;
     public event ParagraphNullableEventHandler? OnPrimaryDoubleClicked;
     public event PositionEventHandler? OnSetStartAndOffsetTheRest;
+
+    /// <summary>
+    /// Optional: seconds of audio that belongs to a paragraph (the TTS review window's generated
+    /// clip). When it returns more than 0, a thin bar is drawn along the bottom of the paragraph
+    /// from its start for that many seconds - green while it fits inside the cue, red for the
+    /// part that runs past the cue's end - so the user sees at a glance which lines need their
+    /// timing fixed (#14000).
+    /// </summary>
+    public Func<SubtitleLineViewModel, double>? ParagraphAudioLengthProvider { get; set; }
+
+    private static readonly IBrush PaintAudioLengthFits = new SolidColorBrush(Color.FromArgb(190, 70, 190, 110));
+    private static readonly IBrush PaintAudioLengthOverrun = new SolidColorBrush(Color.FromArgb(220, 235, 70, 70));
+
+    /// <summary>Raised when a primary-button press lands on an existing paragraph and starts a
+    /// move/resize drag. Lets hosts select the paragraph the user grabbed before the drag
+    /// mutates it (#14000) - a click is delivered via <see cref="OnPrimarySingleClicked"/> instead.</summary>
+    public event ParagraphEventHandler? OnDragStarted;
 
     /// <summary>Raised when the user clicks the empty waveform to generate it on demand
     /// (shown only when auto-generate is off and there are no cached peaks).</summary>
@@ -683,7 +720,7 @@ public class AudioVisualizer : Control
             {
                 if (seconds < firstSelected.EndTime.TotalSeconds - 0.01)
                 {
-                    firstSelected.SetStartTimeOnly(TimeSpan.FromSeconds(seconds));
+                    firstSelected.SetStartTimeOnly(TimeSpanExtensions.FromSecondsWholeMilliseconds(seconds));
                 }
 
                 e.Handled = true;
@@ -700,7 +737,7 @@ public class AudioVisualizer : Control
             {
                 if (seconds > firstSelected.StartTime.TotalSeconds + 0.01)
                 {
-                    firstSelected.EndTime = TimeSpan.FromSeconds(seconds);
+                    firstSelected.EndTime = TimeSpanExtensions.FromSecondsWholeMilliseconds(seconds);
                 }
 
                 e.Handled = true;
@@ -715,7 +752,7 @@ public class AudioVisualizer : Control
             var seconds = RelativeXPositionToSeconds(point.X);
             if (firstSelected != null)
             {
-                firstSelected.SetStartTimeKeepDuration(TimeSpan.FromSeconds(seconds));
+                firstSelected.SetStartTimeKeepDuration(TimeSpanExtensions.FromSecondsWholeMilliseconds(seconds));
                 e.Handled = true;
                 InvalidateVisual();
                 return;
@@ -729,6 +766,16 @@ public class AudioVisualizer : Control
     private void OnPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
         _lastMouseWheelScroll = Environment.TickCount64;
+
+        // Resync from the wheel event itself, like every other pointer handler here. The
+        // KeyDown/KeyUp mirror goes stale whenever a Ctrl shortcut is pressed over the
+        // waveform: the shortcut handler swallows the key-up, so _isCtrlDown stayed true and
+        // the wheel kept setting the video position at the cursor even with "mouse-wheel sets
+        // video position" turned off (#14306). e.KeyModifiers is the state at the scroll.
+        _isCtrlDown = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        _isShiftDown = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        _isAltDown = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+        _isMetaDown = e.KeyModifiers.HasFlag(KeyModifiers.Meta);
 
         var point = e.GetPosition(this);
         var properties = e.GetCurrentPoint(this).Properties;
@@ -1097,8 +1144,8 @@ public class AudioVisualizer : Control
             var deltaSeconds = RelativeXPositionToSeconds(deltaX);
             _newSelectionSeconds = deltaSeconds;
 
-            NewSelectionParagraph.StartTime = TimeSpan.FromSeconds(deltaSeconds);
-            NewSelectionParagraph.EndTime = TimeSpan.FromSeconds(deltaSeconds);
+            NewSelectionParagraph.StartTime = TimeSpanExtensions.FromSecondsWholeMilliseconds(deltaSeconds);
+            NewSelectionParagraph.EndTime = TimeSpanExtensions.FromSecondsWholeMilliseconds(deltaSeconds);
             _pointerDragActive = true;
             InvalidateVisual();
             return;
@@ -1215,6 +1262,10 @@ public class AudioVisualizer : Control
         }
 
         _pointerDragActive = _interactionMode != InteractionMode.None;
+        if (_pointerDragActive && _activeParagraph != null)
+        {
+            OnDragStarted?.Invoke(this, new ParagraphEventArgs(_startPointerSeconds, _activeParagraph));
+        }
     }
 
     /// <summary>
@@ -1328,13 +1379,15 @@ public class AudioVisualizer : Control
 
             if (seconds > _newSelectionSeconds)
             {
-                newP.StartTime = TimeSpan.FromSeconds(_newSelectionSeconds);
-                newP.EndTime = TimeSpan.FromSeconds(seconds);
+                newP.SetTimes(
+                    TimeSpanExtensions.FromSecondsWholeMilliseconds(_newSelectionSeconds),
+                    TimeSpanExtensions.FromSecondsWholeMilliseconds(seconds));
             }
             else
             {
-                newP.StartTime = TimeSpan.FromSeconds(seconds);
-                newP.EndTime = TimeSpan.FromSeconds(_newSelectionSeconds);
+                newP.SetTimes(
+                    TimeSpanExtensions.FromSecondsWholeMilliseconds(seconds),
+                    TimeSpanExtensions.FromSecondsWholeMilliseconds(_newSelectionSeconds));
             }
 
             _lastPointerEditMs = Environment.TickCount64;
@@ -1509,8 +1562,11 @@ public class AudioVisualizer : Control
 
                 if (_activeParagraph != null)
                 {
-                    _activeParagraph.StartTime = TimeSpan.FromSeconds(newStart);
-                    _activeParagraph.EndTime = TimeSpan.FromSeconds(newStart + _originalDurationSeconds);
+                    // SetTimes applies both ends atomically (no transient duration exposed to the
+                    // bound editors), and adding the duration as a whole-millisecond TimeSpan means
+                    // moving a line cannot round its length a millisecond up or down (#14056).
+                    var movedStart = TimeSpanExtensions.FromSecondsWholeMilliseconds(newStart);
+                    _activeParagraph.SetTimes(movedStart, movedStart + TimeSpanExtensions.FromSecondsWholeMilliseconds(_originalDurationSeconds));
                 }
                 break;
             case InteractionMode.MovingSelection:
@@ -1537,9 +1593,8 @@ public class AudioVisualizer : Control
 
                 foreach (var item in _selectionMoveSnapshot)
                 {
-                    var start = item.StartSeconds + shift;
-                    item.Paragraph.StartTime = TimeSpan.FromSeconds(start);
-                    item.Paragraph.EndTime = TimeSpan.FromSeconds(start + item.DurationSeconds);
+                    var start = TimeSpanExtensions.FromSecondsWholeMilliseconds(item.StartSeconds + shift);
+                    item.Paragraph.SetTimes(start, start + TimeSpanExtensions.FromSecondsWholeMilliseconds(item.DurationSeconds));
                 }
 
                 break;
@@ -1552,8 +1607,21 @@ public class AudioVisualizer : Control
                 newStart = snappedLeft;
                 if (_activeParagraphPrevious != null)
                 {
-                    _activeParagraph.SetStartTimeOnly(TimeSpan.FromSeconds(newStart));
-                    _activeParagraphPrevious.EndTime = TimeSpan.FromSeconds(newPrevEnd);
+                    // Same guards as the plain left resize, adapted to the pair: never below
+                    // zero, never erase the previous cue, and never past this cue's own end.
+                    var leftGapSeconds = newStart - newPrevEnd;
+                    var minStart = Math.Max(0, _activeParagraphPrevious.StartTime.TotalSeconds + 0.1 + leftGapSeconds);
+                    if (newStart < minStart)
+                    {
+                        newPrevEnd += minStart - newStart;
+                        newStart = minStart;
+                    }
+
+                    if (newStart < _activeParagraph.EndTime.TotalSeconds - 0.1)
+                    {
+                        _activeParagraph.SetStartTimeOnly(TimeSpanExtensions.FromSecondsWholeMilliseconds(newStart));
+                        _activeParagraphPrevious.EndTime = TimeSpanExtensions.FromSecondsWholeMilliseconds(newPrevEnd);
+                    }
                 }
 
                 break;
@@ -1565,8 +1633,21 @@ public class AudioVisualizer : Control
                 newEnd = snappedRight;
                 if (_activeParagraphNext != null)
                 {
-                    _activeParagraph.EndTime = TimeSpan.FromSeconds(newEnd);
-                    _activeParagraphNext.SetStartTimeOnly(TimeSpan.FromSeconds(newNextStart));
+                    // Mirror of the left guards: never erase the next cue, and never before
+                    // this cue's own start.
+                    var rightGapSeconds = newNextStart - newEnd;
+                    var maxEnd = _activeParagraphNext.EndTime.TotalSeconds - 0.1 - rightGapSeconds;
+                    if (newEnd > maxEnd)
+                    {
+                        newNextStart -= newEnd - maxEnd;
+                        newEnd = maxEnd;
+                    }
+
+                    if (newEnd > _activeParagraph.StartTime.TotalSeconds + 0.1)
+                    {
+                        _activeParagraph.EndTime = TimeSpanExtensions.FromSecondsWholeMilliseconds(newEnd);
+                        _activeParagraphNext.SetStartTimeOnly(TimeSpanExtensions.FromSecondsWholeMilliseconds(newNextStart));
+                    }
                 }
 
                 break;
@@ -1597,7 +1678,7 @@ public class AudioVisualizer : Control
 
                 if (newStart < _activeParagraph.EndTime.TotalSeconds - 0.1)
                 {
-                    _activeParagraph.SetStartTimeOnly(TimeSpan.FromSeconds(newStart));
+                    _activeParagraph.SetStartTimeOnly(TimeSpanExtensions.FromSecondsWholeMilliseconds(newStart));
                 }
 
                 break;
@@ -1623,7 +1704,7 @@ public class AudioVisualizer : Control
 
                 if (newEnd > _activeParagraph.StartTime.TotalSeconds + 0.1)
                 {
-                    _activeParagraph.EndTime = TimeSpan.FromSeconds(newEnd);
+                    _activeParagraph.EndTime = TimeSpanExtensions.FromSecondsWholeMilliseconds(newEnd);
                 }
 
                 break;
@@ -3168,21 +3249,26 @@ public class AudioVisualizer : Control
     // short-lived garbage to trigger GC pauses, which show up as the cursor briefly freezing and
     // then jumping. Cache the prepared text and the shaped FormattedText; both are cleared in
     // ResetCache() when the waveform font/colors change.
-    private readonly Dictionary<string, FormattedText> _paragraphFormattedTextCache = new(512);
-    private readonly Dictionary<string, (List<string> Lines, string Unwrapped)> _paragraphTextCache = new(512);
+    private readonly Dictionary<(string Text, bool RightToLeft), FormattedText> _paragraphFormattedTextCache = new(512);
+    private readonly Dictionary<string, (List<string> Lines, string Unwrapped, bool RightToLeft)> _paragraphTextCache = new(512);
 
-    private FormattedText GetCachedParagraphText(string text)
+    // The direction is part of the key: the same string shapes differently in the two directions
+    // (see GetPreparedParagraphText), and the number/duration/CPS labels stay left to right even
+    // under a right to left paragraph.
+    internal FormattedText GetCachedParagraphText(string text, bool rightToLeft = false)
     {
-        if (!_paragraphFormattedTextCache.TryGetValue(text, out var formatted))
+        var key = (text, rightToLeft);
+        if (!_paragraphFormattedTextCache.TryGetValue(key, out var formatted))
         {
             if (_paragraphFormattedTextCache.Count > 8000)
             {
                 _paragraphFormattedTextCache.Clear();
             }
 
-            formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            formatted = new FormattedText(text, CultureInfo.CurrentCulture,
+                rightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
                 _typeface, _fontSize, _paintText);
-            _paragraphFormattedTextCache[text] = formatted;
+            _paragraphFormattedTextCache[key] = formatted;
         }
 
         return formatted;
@@ -3245,7 +3331,7 @@ public class AudioVisualizer : Control
         return label;
     }
 
-    private (List<string> Lines, string Unwrapped) GetPreparedParagraphText(string rawText)
+    internal (List<string> Lines, string Unwrapped, bool RightToLeft) GetPreparedParagraphText(string rawText)
     {
         if (!_paragraphTextCache.TryGetValue(rawText, out var prepared))
         {
@@ -3257,7 +3343,14 @@ public class AudioVisualizer : Control
 
             var lines = text.SplitToLines();
             var unwrapped = string.Join("  ", lines);
-            prepared = (lines, unwrapped);
+
+            // Laying Arabic or Hebrew out left to right hands the neutrals - a dialogue dash, an
+            // ellipsis, brackets - the paragraph direction instead of the direction of the letters
+            // around them, so they end up on the wrong side of the line (issue 14262). Take the
+            // direction from the whole paragraph, not per line: a second line that happens to hold
+            // only neutrals or a Latin name belongs to the same block as the first.
+            var rightToLeft = TextToFlowDirectionConverter.GetFlowDirection(text) == FlowDirection.RightToLeft;
+            prepared = (lines, unwrapped, rightToLeft);
 
             if (_paragraphTextCache.Count > 8000)
             {
@@ -3291,8 +3384,10 @@ public class AudioVisualizer : Control
         context.DrawLine(_paintLeft, new Point(currentRegionLeft, 0), new Point(currentRegionLeft, height));
         context.DrawLine(_paintRight, new Point(currentRegionRight - 1, 0), new Point(currentRegionRight - 1, height));
 
-        // Draw clipped text (prepared text + shaped FormattedText are cached; see GetCachedParagraphText)
-        var prepared = GetPreparedParagraphText(paragraph.Text);
+        // Draw clipped text (prepared text + shaped FormattedText are cached; see GetCachedParagraphText).
+        // With "toggle translation and original in video/audio preview" on, the waveform shows the
+        // original text like SE4 did (#14252).
+        var prepared = GetPreparedParagraphText(ShowOriginalText ? paragraph.OriginalText : paragraph.Text);
 
         var textBounds = new Rect(currentRegionLeft + 1, 0, currentRegionWidth - 3, height);
 
@@ -3300,7 +3395,7 @@ public class AudioVisualizer : Control
         {
             if (Se.Settings.Waveform.WaveformUnwrapText)
             {
-                var formattedText = GetCachedParagraphText(prepared.Unwrapped);
+                var formattedText = GetCachedParagraphText(prepared.Unwrapped, prepared.RightToLeft);
                 context.DrawText(formattedText, new Point(currentRegionLeft + 3, 14));
             }
             else
@@ -3308,13 +3403,46 @@ public class AudioVisualizer : Control
                 double addY = 0;
                 foreach (var line in prepared.Lines)
                 {
-                    var formattedText = GetCachedParagraphText(line);
+                    var formattedText = GetCachedParagraphText(line, prepared.RightToLeft);
                     context.DrawText(formattedText, new Point(currentRegionLeft + 3, 14 + addY));
                     addY += formattedText.Height;
                 }
             }
 
             DrawParagraphFooter(context, paragraph, currentRegionLeft, currentRegionWidth, height, ref renderCtx);
+        }
+
+        DrawParagraphAudioLength(context, paragraph, currentRegionLeft, currentRegionRight, height, ref renderCtx);
+    }
+
+    // Drawn outside the text clip on purpose: the overrun part extends past the right border.
+    private void DrawParagraphAudioLength(DrawingContext context, SubtitleLineViewModel paragraph,
+        double currentRegionLeft, double currentRegionRight, double height, ref RenderContext renderCtx)
+    {
+        var provider = ParagraphAudioLengthProvider;
+        if (provider == null)
+        {
+            return;
+        }
+
+        var audioSeconds = provider(paragraph);
+        if (audioSeconds <= 0)
+        {
+            return;
+        }
+
+        var audioRight = SecondsToXPositionOptimized(paragraph.StartTime.TotalSeconds + audioSeconds - renderCtx.StartPositionSeconds, renderCtx.SampleRate, renderCtx.ZoomFactor);
+        const double barHeight = 4;
+        var y = height - barHeight - 1;
+        var fitsRight = Math.Min(audioRight, currentRegionRight - 1);
+        if (fitsRight > currentRegionLeft + 1)
+        {
+            context.FillRectangle(PaintAudioLengthFits, new Rect(currentRegionLeft + 1, y, fitsRight - currentRegionLeft - 1, barHeight));
+        }
+
+        if (audioRight > currentRegionRight)
+        {
+            context.FillRectangle(PaintAudioLengthOverrun, new Rect(currentRegionRight - 1, y, audioRight - currentRegionRight + 1, barHeight));
         }
     }
 
@@ -3371,7 +3499,11 @@ public class AudioVisualizer : Control
         string? cpsLine = null;
         if (n > 99 && Se.Settings.Waveform.WaveformShowCps && paragraph.Duration.TotalMilliseconds > 0)
         {
-            cpsLine = GetCachedCpsLabel(paragraph.CharactersPerSecond);
+            // Counts the text that is actually on screen: with the original drawn, a CPS taken
+            // from the hidden translation reads as the original's and would be wrong (#14252).
+            cpsLine = GetCachedCpsLabel(ShowOriginalText
+                ? paragraph.OriginalCharactersPerSecond
+                : paragraph.CharactersPerSecond);
         }
 
         if (baseLine == null && cpsLine == null)
@@ -3506,12 +3638,18 @@ public class AudioVisualizer : Control
                 _chapterTextCache.Clear();
             }
 
-            formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            // Right to left titles get their own direction, like the paragraph text does, so that
+            // neutrals keep the side the letters around them ask for. The alignment is pinned to
+            // the left: the flag is drawn from its left edge, and a right to left line would
+            // otherwise be pushed to the far end of MaxTextWidth, outside the flag.
+            formatted = new FormattedText(text, CultureInfo.CurrentCulture,
+                TextToFlowDirectionConverter.GetFlowDirection(text),
                 _typeface, 10, _paintChapterFlagTextBrush)
             {
                 MaxTextWidth = ChapterFlagMaxWidth - ChapterFlagPadding * 2,
                 MaxLineCount = 1,
                 Trimming = TextTrimming.CharacterEllipsis,
+                TextAlignment = TextAlignment.Left,
             };
 
             _chapterTextCache[text] = formatted;
@@ -3759,81 +3897,140 @@ public class AudioVisualizer : Control
         LoadParagraphs(subtitle, subtitleIndex, selectedIndexes);
     }
 
+    /// <summary>
+    /// Rebuilds the paragraph sets this control draws, and repaints when they actually changed.
+    /// <para>
+    /// The repaint is not optional bookkeeping: nothing else notices. The lists are plain fields
+    /// (mutated in place - <see cref="AllSelectedParagraphs"/> is an AffectsRender property, but
+    /// only its identity is, not its contents), and while the video is paused no AffectsRender
+    /// property moves at all, so the last drawn frame just stays on screen. Options/OK is enough
+    /// to leave a wrong one there: the rebuilt video player reports 0 for a moment, "center on
+    /// video position" scrolls the waveform to the start on the 16 ms cursor timer, this reload
+    /// (on the 50 ms timer, at the lower DispatcherTimer priority, competing with the rebuild)
+    /// empties the list, and the frame drawn when the player lands back on the real position
+    /// shows the right time range with no paragraphs in it. Reloading the list a tick later
+    /// fixed the state but not the picture, which stayed blank until playback resumed and moved
+    /// an AffectsRender property again (issue #14218).
+    /// </para>
+    /// </summary>
     private void LoadParagraphs(IReadOnlyList<SubtitleLineViewModel> subtitle, int primarySelectedIndex, List<SubtitleLineViewModel> selectedIndexes)
     {
+        bool changed;
         lock (_lock)
         {
-            _displayableParagraphs.Clear();
-            SelectedParagraph = null;
-            AllSelectedParagraphs.Clear();
+            _previousDisplayableParagraphs.Clear();
+            _previousDisplayableParagraphs.AddRange(_displayableParagraphs);
+            _previousSelectedParagraphs.Clear();
+            _previousSelectedParagraphs.AddRange(AllSelectedParagraphs);
 
-            if (WavePeaks == null || subtitle.Count == 0)
+            LoadParagraphsInLock(subtitle, primarySelectedIndex, selectedIndexes);
+
+            changed = !SameParagraphs(_previousDisplayableParagraphs, _displayableParagraphs) ||
+                      !SameParagraphs(_previousSelectedParagraphs, AllSelectedParagraphs);
+        }
+
+        if (changed)
+        {
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
+    /// Reference comparison, not value comparison: the rows are stable view models, so a change
+    /// of membership or order is what this has to catch. Edits to a row that stays in the set
+    /// (a drag, a text change) repaint through their own paths.
+    /// </summary>
+    private static bool SameParagraphs(List<SubtitleLineViewModel> a, List<SubtitleLineViewModel> b)
+    {
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!ReferenceEquals(a[i], b[i]))
             {
-                return;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Body of <see cref="LoadParagraphs"/>; call it holding <c>_lock</c>.</summary>
+    private void LoadParagraphsInLock(IReadOnlyList<SubtitleLineViewModel> subtitle, int primarySelectedIndex, List<SubtitleLineViewModel> selectedIndexes)
+    {
+        _displayableParagraphs.Clear();
+        SelectedParagraph = null;
+        AllSelectedParagraphs.Clear();
+
+        if (WavePeaks == null || subtitle.Count == 0)
+        {
+            return;
+        }
+
+        const double additionalSeconds = 15.0;
+        var startThreshold = (StartPositionSeconds - additionalSeconds) * TimeCode.BaseUnit;
+        var endThreshold = (EndPositionSeconds + additionalSeconds) * TimeCode.BaseUnit;
+        var maxTime = TimeCode.MaxTimeTotalMilliseconds;
+
+        // 1. Use Binary Search to find the first potential subtitle in the time range O(log N)
+        var startIndex = FindFirstIndexAfterTime(subtitle, startThreshold);
+
+        var lastStartTime = -1d;
+        var count = 0;
+
+        // 2. Linear scan only the relevant window
+        for (var i = startIndex; i < subtitle.Count; i++)
+        {
+            var p = subtitle[i];
+            var pStart = p.StartTime.TotalMilliseconds;
+
+            // Since it's sorted, if we exceed the end threshold or max time, we can stop entirely
+            if (pStart > endThreshold || pStart >= maxTime)
+            {
+                break;
             }
 
-            const double additionalSeconds = 15.0;
-            var startThreshold = (StartPositionSeconds - additionalSeconds) * TimeCode.BaseUnit;
-            var endThreshold = (EndPositionSeconds + additionalSeconds) * TimeCode.BaseUnit;
-            var maxTime = TimeCode.MaxTimeTotalMilliseconds;
-
-            // 1. Use Binary Search to find the first potential subtitle in the time range O(log N)
-            var startIndex = FindFirstIndexAfterTime(subtitle, startThreshold);
-
-            var lastStartTime = -1d;
-            var count = 0;
-
-            // 2. Linear scan only the relevant window
-            for (var i = startIndex; i < subtitle.Count; i++)
+            // Skip subtitles that end before our window starts
+            if (p.EndTime.TotalMilliseconds < startThreshold)
             {
-                var p = subtitle[i];
-                var pStart = p.StartTime.TotalMilliseconds;
-
-                // Since it's sorted, if we exceed the end threshold or max time, we can stop entirely
-                if (pStart > endThreshold || pStart >= maxTime)
-                {
-                    break;
-                }
-
-                // Skip subtitles that end before our window starts
-                if (p.EndTime.TotalMilliseconds < startThreshold)
-                {
-                    continue;
-                }
-
-                // 3. Apply filtering logic immediately to avoid second loop
-                var isTooShortOrDense = count > 200 && (p.Duration.TotalMilliseconds < 0.01 || pStart - lastStartTime < 90);
-
-                if (!isTooShortOrDense)
-                {
-                    _displayableParagraphs.Add(p);
-                    lastStartTime = pStart;
-                    count++;
-                }
-
-                if (count >= 250)
-                {
-                    break;
-                }
+                continue;
             }
 
-            // 4. Optimized Selection Handling
-            var primaryParagraph = (primarySelectedIndex >= 0 && primarySelectedIndex < subtitle.Count)
-                ? subtitle[primarySelectedIndex]
-                : null;
+            // 3. Apply filtering logic immediately to avoid second loop
+            var isTooShortOrDense = count > 200 && (p.Duration.TotalMilliseconds < 0.01 || pStart - lastStartTime < 90);
 
-            if (primaryParagraph != null && !primaryParagraph.StartTime.IsMaxTime())
+            if (!isTooShortOrDense)
             {
-                SelectedParagraph = primaryParagraph;
-                AllSelectedParagraphs.Add(primaryParagraph);
+                _displayableParagraphs.Add(p);
+                lastStartTime = pStart;
+                count++;
             }
 
-            foreach (var p in selectedIndexes)
+            if (count >= 250)
             {
-                if (p != null && !p.StartTime.IsMaxTime() && p != primaryParagraph)
-                {
-                    AllSelectedParagraphs.Add(p);
-                }
+                break;
+            }
+        }
+
+        // 4. Optimized Selection Handling
+        var primaryParagraph = (primarySelectedIndex >= 0 && primarySelectedIndex < subtitle.Count)
+            ? subtitle[primarySelectedIndex]
+            : null;
+
+        if (primaryParagraph != null && !primaryParagraph.StartTime.IsMaxTime())
+        {
+            SelectedParagraph = primaryParagraph;
+            AllSelectedParagraphs.Add(primaryParagraph);
+        }
+
+        foreach (var p in selectedIndexes)
+        {
+            if (p != null && !p.StartTime.IsMaxTime() && p != primaryParagraph)
+            {
+                AllSelectedParagraphs.Add(p);
             }
         }
     }
@@ -4116,9 +4313,62 @@ public class AudioVisualizer : Control
         return -1;
     }
 
+    /// <summary>
+    /// The lowest peak in a time range, as a percentage of the highest peak in the file.
+    /// Used by "guess start" to find the noise floor around a cue (SE 4 parity).
+    /// </summary>
+    public double FindLowPercentage(double startSeconds, double endSeconds)
+    {
+        if (WavePeaks == null || WavePeaks.Peaks.Count == 0 || WavePeaks.HighestPeak == 0)
+        {
+            return 0;
+        }
+
+        var min = Math.Max(0, SecondsToSampleIndex(startSeconds));
+        var max = Math.Min(WavePeaks.Peaks.Count, SecondsToSampleIndex(endSeconds));
+        if (max <= min)
+        {
+            return 0;
+        }
+
+        var minMax = GetMinAndMax(min, max);
+        return minMax.Min * 100.0 / WavePeaks.HighestPeak;
+    }
+
+    /// <summary>
+    /// The highest peak in a time range, as a percentage of the highest peak in the file.
+    /// </summary>
+    public double FindHighPercentage(double startSeconds, double endSeconds)
+    {
+        if (WavePeaks == null || WavePeaks.Peaks.Count == 0 || WavePeaks.HighestPeak == 0)
+        {
+            return 0;
+        }
+
+        var min = Math.Max(0, SecondsToSampleIndex(startSeconds));
+        var max = Math.Min(WavePeaks.Peaks.Count, SecondsToSampleIndex(endSeconds));
+        if (max <= min)
+        {
+            return 0;
+        }
+
+        var minMax = GetMinAndMax(min, max);
+        return minMax.Max * 100.0 / WavePeaks.HighestPeak;
+    }
+
     private MinMax GetMinAndMax(int startIndex, int endIndex)
     {
         if (WavePeaks == null || WavePeaks.Peaks.Count == 0)
+        {
+            return new MinMax { Min = 0, Max = 0, Avg = 0 };
+        }
+
+        // Clamp here rather than at each call site: most callers clamp, but the "guess start"
+        // pair passes SecondsToSampleIndex(...) raw, so a cue starting within 0.8 s of the end of
+        // the peaks indexed past the array. This also removes the divide-by-zero on an empty range.
+        startIndex = Math.Max(0, startIndex);
+        endIndex = Math.Min(WavePeaks.Peaks.Count, endIndex);
+        if (endIndex <= startIndex)
         {
             return new MinMax { Min = 0, Max = 0, Avg = 0 };
         }

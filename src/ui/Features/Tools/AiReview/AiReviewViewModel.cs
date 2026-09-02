@@ -22,6 +22,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Nikse.SubtitleEdit.UiLogic.LlamaCpp;
+using Nikse.SubtitleEdit.UiLogic.Translate;
 
 namespace Nikse.SubtitleEdit.Features.Tools.AiReview;
 
@@ -74,6 +75,10 @@ public partial class AiReviewViewModel : ObservableObject
     private readonly IWindowService _windowService;
     private readonly List<ReviewSuggestionItem> _allSuggestions = new();
     private Subtitle _subtitle = new();
+    private SubtitleFormat? _subtitleFormat;
+
+    /// <summary>Leading/trailing ASSA blocks cut off each sent line, keyed by line number, glued back on in <see cref="AddSuggestion"/>.</summary>
+    private readonly Dictionary<int, StrippedLine> _strippedByNumber = new();
     private string _languageCode = "en";
     private CancellationTokenSource _cancellationTokenSource = new();
     private bool _syncingSelection;
@@ -154,6 +159,7 @@ public partial class AiReviewViewModel : ObservableObject
         Action<Subtitle>? applyCallback = null)
     {
         _subtitle = subtitle;
+        _subtitleFormat = subtitleFormat;
         _playLine = playLine;
         _stopPlayback = stopPlayback;
         _applyCallback = applyCallback;
@@ -375,13 +381,19 @@ public partial class AiReviewViewModel : ObservableObject
         ProgressValue = 0;
 
         var lines = new List<ReviewLine>();
+        _strippedByNumber.Clear();
+        var isAssa = _subtitleFormat is AdvancedSubStationAlpha or SubStationAlpha;
         for (var i = 0; i < _subtitle.Paragraphs.Count; i++)
         {
-            var text = _subtitle.Paragraphs[i].Text;
-            if (!string.IsNullOrWhiteSpace(text))
+            var p = _subtitle.Paragraphs[i];
+            var stripped = StrippedLine.Strip(p.Text);
+            if (string.IsNullOrWhiteSpace(stripped.Text))
             {
-                lines.Add(new ReviewLine(i + 1, text));
+                continue; // empty, or a pure override/drawing line - nothing to proofread
             }
+
+            _strippedByNumber[i + 1] = stripped;
+            lines.Add(new ReviewLine(i + 1, stripped.Text, p.Actor, isAssa ? p.Extra : null));
         }
 
         var unitIds = AiReviewChunker.BuildUnitIds(lines);
@@ -397,6 +409,9 @@ public partial class AiReviewViewModel : ObservableObject
         using var client = new AiReviewClient();
         var processedLines = 0;
         var consecutiveErrors = 0;
+        // Chunks the engine never answered. Counting their lines as reviewed let a run with an
+        // unreachable engine finish at 100% reporting "no issues found".
+        var failedChunks = 0;
         var delay = TimeSpan.FromSeconds(Math.Max(0, RequestDelaySeconds));
         var lastRequestCompletedUtc = DateTime.MinValue;
 
@@ -457,6 +472,7 @@ public partial class AiReviewViewModel : ObservableObject
                 catch (HttpRequestException e)
                 {
                     consecutiveErrors++;
+                    failedChunks++;
                     if (consecutiveErrors >= 3)
                     {
                         await MessageBox.Show(Window, Se.Language.General.Error,
@@ -477,9 +493,16 @@ public partial class AiReviewViewModel : ObservableObject
                 ProgressValue = Math.Min(100.0, processedLines * 100.0 / Math.Max(1, lines.Count));
             }
 
-            StatusText = _allSuggestions.Count == 0 && processedLines >= lines.Count
+            StatusText = _allSuggestions.Count == 0 && processedLines >= lines.Count && failedChunks == 0
                 ? l.NoIssuesFound
                 : string.Format(l.ReviewDone, _allSuggestions.Count, processedLines);
+
+            if (failedChunks > 0 && Window != null)
+            {
+                await MessageBox.Show(Window, Se.Language.General.Error,
+                    string.Format(l.EngineError, $"{failedChunks} chunk(s) could not be reviewed"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -596,7 +619,9 @@ public partial class AiReviewViewModel : ObservableObject
         }
 
         var before = _subtitle.Paragraphs[paragraphIndex].Text;
-        var after = change.NewText;
+        var after = _strippedByNumber.TryGetValue(change.Number, out var stripped)
+            ? stripped.Restore(change.NewText)
+            : change.NewText;
         if (before.Trim() == after.Trim())
         {
             return;

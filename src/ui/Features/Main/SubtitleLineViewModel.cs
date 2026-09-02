@@ -1,7 +1,8 @@
-using Avalonia.Media;
+﻿using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Nikse.SubtitleEdit.Core.Common;
 using Nikse.SubtitleEdit.Core.SubtitleFormats;
+using Nikse.SubtitleEdit.Features.Shared.ErrorList;
 using Nikse.SubtitleEdit.Logic;
 using Nikse.SubtitleEdit.Logic.Config;
 using SkiaSharp;
@@ -51,6 +52,16 @@ public partial class SubtitleLineViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _bookmark;
+
+    /// <summary>
+    /// The forced-narrative mark: a line that must also go into the separate forced subtitle
+    /// many clients ask for alongside the full file (#14322). Observable so the "Forced"
+    /// column follows the toggle, undo and reload. Kept in the same sidecar as the bookmarks
+    /// (<see cref="Nikse.SubtitleEdit.UiLogic.Common.SubtitleMarksPersistence"/>) - almost no subtitle format has
+    /// anywhere to put it, though the image formats do (Blu-ray sup, VobSub, BDN xml).
+    /// </summary>
+    [ObservableProperty]
+    private bool _forced;
 
     [ObservableProperty]
     private TimeSpan _startTime;
@@ -193,7 +204,6 @@ public partial class SubtitleLineViewModel : ObservableObject
     }
 
     public bool NewSection { get; set; }
-    public bool Forced { get; set; }
     public Guid Id { get; set; }
     public bool IsCpsColumnVisible { get; set; } = true;
     public bool IsDefault => Text == string.Empty && Number == 0 && Duration == TimeSpan.Zero && StartTime == TimeSpan.Zero;
@@ -258,7 +268,7 @@ public partial class SubtitleLineViewModel : ObservableObject
         MarginR = p.MarginR;
         MarginV = p.MarginV;
         NewSection = p.NewSection;
-        Forced = p.Forced;
+        _forced = p.Forced;
         _bookmark = p.Bookmark;
         _isReferenceOnly = p.IsReferenceOnly;
         ReferenceParagraphId = p.ReferenceParagraphId;
@@ -528,6 +538,45 @@ public partial class SubtitleLineViewModel : ObservableObject
         }
     }
 
+    private string? _cpsOriginalCacheText;
+    private TimeSpan _cpsOriginalCacheStart;
+    private TimeSpan _cpsOriginalCacheEnd;
+    private double _cpsOriginalCacheValue;
+
+    /// <summary>
+    /// Characters per second of the original text - what the waveform footer shows while it draws
+    /// the original instead of the translation ("toggle translation and original in video/audio
+    /// preview", #14252). Memoized exactly like <see cref="CharactersPerSecond"/>: the footer reads
+    /// it for every visible paragraph on every painted frame.
+    /// </summary>
+    public double OriginalCharactersPerSecond
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(OriginalText))
+            {
+                return 0;
+            }
+
+            if (Duration.TotalMilliseconds <= 1.0)
+            {
+                return 999.0;
+            }
+
+            if (!ReferenceEquals(_cpsOriginalCacheText, OriginalText) ||
+                _cpsOriginalCacheStart != StartTime ||
+                _cpsOriginalCacheEnd != EndTime)
+            {
+                _cpsOriginalCacheText = OriginalText;
+                _cpsOriginalCacheStart = StartTime;
+                _cpsOriginalCacheEnd = EndTime;
+                _cpsOriginalCacheValue = SubtitleTextInfoHelper.GetCharactersPerSecond(OriginalText, StartTime, EndTime);
+            }
+
+            return _cpsOriginalCacheValue;
+        }
+    }
+
     public double WordsPerMinute // WPM
     {
         get
@@ -716,10 +765,15 @@ public partial class SubtitleLineViewModel : ObservableObject
         get
         {
             var general = Se.Settings.General;
-            if ((general.ColorDurationTooShort && Duration.TotalMilliseconds < general.SubtitleMinimumDisplayMilliseconds) ||
-                (general.ColorDurationTooLong && Duration.TotalMilliseconds > general.SubtitleMaximumDisplayMilliseconds) ||
+
+            // Rounded exactly as HasErrors/GetErrorList round - a cell tinted on the raw value
+            // while the error list rounds meant a red cell that "list errors" and error
+            // navigation could not see (CPS 20.004 against a maximum of 20).
+            var durMsRounded = Math.Round(Duration.TotalMilliseconds, 3, MidpointRounding.AwayFromZero);
+            if ((general.ColorDurationTooShort && durMsRounded < general.SubtitleMinimumDisplayMilliseconds) ||
+                (general.ColorDurationTooLong && durMsRounded > general.SubtitleMaximumDisplayMilliseconds) ||
                 // SE4 fallback: when the CPS column is hidden, surface CPS-too-high on the Duration cell instead
-                ((!general.ShowColumnCps || !IsCpsColumnVisible) && general.ColorCharactersPerSecond && CharactersPerSecond > general.SubtitleMaximumCharactersPerSeconds))
+                ((!general.ShowColumnCps || !IsCpsColumnVisible) && general.ColorCharactersPerSecond && CpsRounded > general.SubtitleMaximumCharactersPerSeconds))
             {
                 return _errorBrush;
             }
@@ -739,7 +793,7 @@ public partial class SubtitleLineViewModel : ObservableObject
         get
         {
             if (Se.Settings.General.ColorCharactersPerSecond &&
-                CharactersPerSecond > Se.Settings.General.SubtitleMaximumCharactersPerSeconds)
+                CpsRounded > Se.Settings.General.SubtitleMaximumCharactersPerSeconds)
             {
                 return _errorBrush;
             }
@@ -832,17 +886,18 @@ public partial class SubtitleLineViewModel : ObservableObject
                 Add("gap too short");
             }
 
-            if (general.ColorDurationTooShort && Duration.TotalMilliseconds < general.SubtitleMinimumDisplayMilliseconds)
+            var durMsRounded = Math.Round(Duration.TotalMilliseconds, 3, MidpointRounding.AwayFromZero);
+            if (general.ColorDurationTooShort && durMsRounded < general.SubtitleMinimumDisplayMilliseconds)
             {
                 Add("duration too short");
             }
 
-            if (general.ColorDurationTooLong && Duration.TotalMilliseconds > general.SubtitleMaximumDisplayMilliseconds)
+            if (general.ColorDurationTooLong && durMsRounded > general.SubtitleMaximumDisplayMilliseconds)
             {
                 Add("duration too long");
             }
 
-            if (general.ColorCharactersPerSecond && CharactersPerSecond > general.SubtitleMaximumCharactersPerSeconds)
+            if (general.ColorCharactersPerSecond && CpsRounded > general.SubtitleMaximumCharactersPerSeconds)
             {
                 Add("CPS " + Math.Round(CharactersPerSecond, 1));
             }
@@ -1161,9 +1216,14 @@ public partial class SubtitleLineViewModel : ObservableObject
         // Set both times atomically via SetTimes; updating start then end
         // separately can briefly expose start > end to the bound editor
         // controls, which clamp the negative duration and corrupt the end time.
-        var newStart = TimeSpan.FromMilliseconds(StartTime.TotalMilliseconds * factor + adjustmentInSeconds * TimeCode.BaseUnit);
-        var newEnd = TimeSpan.FromMilliseconds(EndTime.TotalMilliseconds * factor + adjustmentInSeconds * TimeCode.BaseUnit);
-        SetTimes(newStart, newEnd);
+        //
+        // Round to whole milliseconds via start + scaled duration, not start and end
+        // independently: with independent rounding, lines of equal length scale to durations
+        // that differ by 1 ms depending on where they sit, flipping min-duration/CPS warnings
+        // on some rows and not others (#14056).
+        var newStart = TimeSpanExtensions.FromMillisecondsWholeMilliseconds(StartTime.TotalMilliseconds * factor + adjustmentInSeconds * TimeCode.BaseUnit);
+        var newDuration = TimeSpanExtensions.FromMillisecondsWholeMilliseconds((EndTime.TotalMilliseconds - StartTime.TotalMilliseconds) * factor);
+        SetTimes(newStart, newStart + newDuration);
     }
 
     internal double GetCharactersPerSecond()
@@ -1182,12 +1242,17 @@ public partial class SubtitleLineViewModel : ObservableObject
     /// memoized verdict - the error scans (list errors, go to next/previous error) only need
     /// the yes/no answer, and they ask it for every line of the file.
     /// </summary>
+    /// <summary>
+    /// The CPS the error rules compare against. The cell tints have to use this too, or a row can
+    /// be painted red and still be invisible to "list errors" and to error navigation.
+    /// </summary>
+    private double CpsRounded => CpsHelper.Round(CharactersPerSecond);
+
     public bool HasErrors(SubtitleLineViewModel? prev, SubtitleLineViewModel? next)
     {
         var general = Se.Settings.General;
 
-        if (general.ColorCharactersPerSecond &&
-            Math.Round(CharactersPerSecond, 2, MidpointRounding.AwayFromZero) > general.SubtitleMaximumCharactersPerSeconds)
+        if (general.ColorCharactersPerSecond && CpsRounded > general.SubtitleMaximumCharactersPerSeconds)
         {
             return true;
         }
@@ -1223,108 +1288,129 @@ public partial class SubtitleLineViewModel : ObservableObject
             ? general.ColorTimeCodeOverlap
             : general.ColorGapTooShort && gapMs < general.MinimumBetweenLines.GetMilliseconds();
 
+    /// <summary>All errors as one newline-separated string (batch error list, tooltips).</summary>
     public string GetErrors(SubtitleLineViewModel? prev, SubtitleLineViewModel? next)
     {
         var errors = new StringBuilder();
+        foreach (var error in GetErrorList(prev, next))
+        {
+            errors.AppendLine(error.ToString());
+        }
 
+        return errors.ToString();
+    }
+
+    /// <summary>
+    /// The errors on this line as typed entries, so "List errors" can count and filter
+    /// by class. Same rules as <see cref="HasErrors"/>; keep the two in sync.
+    /// </summary>
+    public List<LineError> GetErrorList(SubtitleLineViewModel? prev, SubtitleLineViewModel? next)
+    {
+        var errors = new List<LineError>();
         var general = Se.Settings.General;
+        var l = Se.Language.ErrorList;
 
-        if (Se.Settings.General.ColorTextTooManyLines)
+        if (general.ColorTextTooManyLines)
         {
             var lineCount = GetStrippedLines().Count;
             if (lineCount > general.MaxNumberOfLines)
             {
-                errors.AppendLine("Max #lines: " + lineCount + " >" + general.MaxNumberOfLines);
+                errors.Add(new LineError(LineErrorType.TooManyLines, string.Format(l.DetailXGreaterThanY, lineCount, general.MaxNumberOfLines)));
             }
         }
 
-        var cpsRounded = Math.Round(CharactersPerSecond, 2, MidpointRounding.AwayFromZero);
-        if (cpsRounded > general.SubtitleMaximumCharactersPerSeconds && Se.Settings.General.ColorCharactersPerSecond)
+        var cpsRounded = CpsRounded;
+        if (cpsRounded > general.SubtitleMaximumCharactersPerSeconds && general.ColorCharactersPerSecond)
         {
-            errors.AppendLine("Cps: " + cpsRounded + " > " + general.SubtitleMaximumCharactersPerSeconds);
+            errors.Add(new LineError(LineErrorType.CharactersPerSecond, string.Format(l.DetailXGreaterThanY, cpsRounded, general.SubtitleMaximumCharactersPerSeconds)));
         }
 
         var durMsRounded = Math.Round(Duration.TotalMilliseconds, 3, MidpointRounding.AwayFromZero);
-        if (durMsRounded < general.SubtitleMinimumDisplayMilliseconds)
+        if (durMsRounded < general.SubtitleMinimumDisplayMilliseconds && general.ColorDurationTooShort)
         {
-            if (Se.Settings.General.ColorDurationTooShort)
-            {
-                errors.AppendLine("Min duration: " + durMsRounded + " < " + general.SubtitleMinimumDisplayMilliseconds);
-            }
-        }
-        if (durMsRounded > general.SubtitleMaximumDisplayMilliseconds)
-        {
-            if (Se.Settings.General.ColorDurationTooLong)
-            {
-                errors.AppendLine("Max duration: " + durMsRounded + " > " + general.SubtitleMaximumDisplayMilliseconds);
-            }
+            errors.Add(new LineError(LineErrorType.DurationTooShort, string.Format(l.DetailXLessThanY, durMsRounded, general.SubtitleMinimumDisplayMilliseconds)));
         }
 
-        if (Se.Settings.General.ColorTextTooLong)
+        if (durMsRounded > general.SubtitleMaximumDisplayMilliseconds && general.ColorDurationTooLong)
+        {
+            errors.Add(new LineError(LineErrorType.DurationTooLong, string.Format(l.DetailXGreaterThanY, durMsRounded, general.SubtitleMaximumDisplayMilliseconds)));
+        }
+
+        if (general.ColorTextTooLong)
         {
             foreach (var line in GetStrippedLines())
             {
                 var lineLength = SubtitleTextInfoHelper.GetLineLength(line);
                 if (lineLength > general.SubtitleLineMaximumLength)
                 {
-                    errors.AppendLine("Max line length: " + lineLength + " > " + general.SubtitleLineMaximumLength);
+                    errors.Add(new LineError(LineErrorType.LineTooLong, string.Format(l.DetailXGreaterThanY, lineLength, general.SubtitleLineMaximumLength)));
                 }
             }
         }
 
-        if (Se.Settings.General.ColorTextTooWide)
+        if (general.ColorTextTooWide)
         {
             foreach (var line in GetStrippedLines())
             {
                 var pixelWidth = CalculatePixelWidth(line);
                 if (pixelWidth > general.ColorTextTooWidePixels)
                 {
-                    errors.AppendLine("Max width (px): " + pixelWidth + " > " + general.ColorTextTooWidePixels);
+                    errors.Add(new LineError(LineErrorType.LineTooWide, string.Format(l.DetailXGreaterThanY, pixelWidth, general.ColorTextTooWidePixels)));
                 }
             }
         }
 
+        // Teletext page width - applies to EBU/teletext-sourced subtitles regardless of the
+        // general "too long" setting, matching the teletext branch in HasTextError.
+        if (UseTeletextLineLength)
+        {
+            var maxCharacters = Text.Contains("<font color=", StringComparison.OrdinalIgnoreCase)
+                ? TeletextMaxCharactersWithColor
+                : TeletextMaxCharacters;
+
+            foreach (var line in GetStrippedLines())
+            {
+                if (line.Length > maxCharacters)
+                {
+                    errors.Add(new LineError(LineErrorType.LineTooLong, string.Format(l.DetailXGreaterThanY, line.Length, maxCharacters)));
+                }
+            }
+        }
+
+        var minGap = general.MinimumBetweenLines.GetMilliseconds();
         if (prev != null)
         {
             var gapPrev = (StartTime - prev.EndTime).TotalMilliseconds;
             if (gapPrev < 0)
             {
-                if (Se.Settings.General.ColorTimeCodeOverlap)
+                if (general.ColorTimeCodeOverlap)
                 {
-                    errors.AppendLine("Overlap from previous: " + Math.Round(-gapPrev, 3));
+                    errors.Add(new LineError(LineErrorType.Overlap, string.Format(l.DetailOverlapFromPrevious, Math.Round(-gapPrev, 3))));
                 }
             }
-            else if (gapPrev < general.MinimumBetweenLines.GetMilliseconds())
+            else if (gapPrev < minGap && general.ColorGapTooShort)
             {
-                if (Se.Settings.General.ColorGapTooShort)
+                errors.Add(new LineError(LineErrorType.GapTooShort, string.Format(l.DetailGapToPrevious, Math.Round(gapPrev, 3), minGap)));
+            }
+        }
+
+        if (next != null)
+        {
+            var gapNext = (next.StartTime - EndTime).TotalMilliseconds;
+            if (gapNext < 0)
+            {
+                if (general.ColorTimeCodeOverlap)
                 {
-                    errors.AppendLine("Min gap to previous: " + Math.Round(gapPrev, 3) + " < " + general.MinimumBetweenLines.GetMilliseconds());
+                    errors.Add(new LineError(LineErrorType.Overlap, string.Format(l.DetailOverlapToNext, Math.Round(-gapNext, 3))));
                 }
             }
-        }
-
-        if (next == null)
-        {
-            return errors.ToString();
-        }
-
-        var gapNext = (next.StartTime - EndTime).TotalMilliseconds;
-        if (gapNext < 0)
-        {
-            if (Se.Settings.General.ColorTimeCodeOverlap)
+            else if (gapNext < minGap && general.ColorGapTooShort)
             {
-                errors.AppendLine("Overlap to next: " + Math.Round(-gapNext, 3));
-            }
-        }
-        else if (gapNext < general.MinimumBetweenLines.GetMilliseconds())
-        {
-            if (Se.Settings.General.ColorGapTooShort)
-            {
-                errors.AppendLine("Min gap to next: " + Math.Round(gapNext, 3) + " < " + general.MinimumBetweenLines.GetMilliseconds());
+                errors.Add(new LineError(LineErrorType.GapTooShort, string.Format(l.DetailGapToNext, Math.Round(gapNext, 3), minGap)));
             }
         }
 
-        return errors.ToString();
+        return errors;
     }
 
     public void RefreshTimeCodes()
@@ -1332,5 +1418,6 @@ public partial class SubtitleLineViewModel : ObservableObject
         OnPropertyChanged(nameof(StartTime));
         OnPropertyChanged(nameof(EndTime));
         OnPropertyChanged(nameof(Duration));
+        OnPropertyChanged(nameof(Gap));
     }
 }

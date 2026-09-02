@@ -17,11 +17,12 @@ Subtitle Edit supports a wide range of subtitle formats for reading and writing.
 | EBU STL | .stl | |
 | Spruce STL | .stl | |
 | Scenarist Closed Captions (SCC) | .scc | |
-| DVD Studio Pro | .txt | |
+| DVD Studio Pro | .stl | |
 | Cavena 890 | .890 | |
 | PAC | .pac | |
 | Cheetah | .cap | |
-| Avid DS | .txt | |
+| Avid DVD, Avid Caption, Avid Caption Drop Frame, Avid Loc Markers | .txt | |
+| Avid STL | .stl | |
 | JSON (various) | .json | |
 | LRC (Lyrics) | .lrc | |
 | and many more... | | |
@@ -47,6 +48,16 @@ Formats used to move captions and markers between Subtitle Edit and video editor
 | Adobe Premiere PrProj Xml | .xml |
 | Adobe Encore (tabs) | .txt |
 
+## Spreadsheets
+
+Import only — a spreadsheet with a header row naming start/end/text columns is read directly, and any layout can be mapped by hand in *File → Import → CSV/XLSX/ODS with custom columns*. See [Import Spreadsheets](../features/import-csv-xlsx.md).
+
+| Format | Extension(s) |
+|--------|--------------|
+| Excel workbook (Office Open XML) | .xlsx |
+| OpenDocument spreadsheet | .ods |
+| Delimited text (comma, semicolon, tab, pipe) | .csv, .tsv, .txt |
+
 ## Image-Based Formats
 
 | Format | Extension(s) |
@@ -55,16 +66,25 @@ Formats used to move captions and markers between Subtitle Edit and video editor
 | VobSub (DVD) | .sub/.idx |
 | BDN XML | .xml |
 | Timed Text Base64 Image (SMPTE-TT bitmap) | .xml |
+| Timed Text Image | .xml |
+| BDN XML 8-bit (palette-indexed PNGs, export) | .xml |
+| DOST | .dost |
+| Final Cut Pro Image (FCP/image) | .xml |
+| SPU Image | .xml |
+| D-Cinema interop/png, D-Cinema SMPTE 2014/png (export) | .xml |
+| Images with time codes in file name (export) | image files |
+| WebVTT Thumbnail (sprite sheet) | .vtt |
 
 ## Container Formats (with embedded subtitles)
 
 | Format | Extension(s) |
 |--------|--------------|
-| Matroska (MKV/MKS) | .mkv, .mks |
-| MP4 / MOV (text tracks, including fragmented MP4/DASH — wvtt, stpp, tx3g) | .mp4, .m4v, .m4s, .3gp |
+| Matroska (MKV/MKS/WebM) | .mkv, .mks, .webm |
+| MP4 / MOV (text tracks, including fragmented MP4/DASH — wvtt, stpp, tx3g) | .mp4, .m4v, .m4s, .3gp, .mov |
 | Transport Stream (teletext, DVB-sub) | .ts, .m2ts, .mts |
-| AVI (XSUB) | .avi |
+| AVI (XSUB) | .avi, .divx |
 | MacCaption | .mcc |
+| MXF (timed-text essences) | .mxf |
 
 ## Video Formats (for loading video)
 

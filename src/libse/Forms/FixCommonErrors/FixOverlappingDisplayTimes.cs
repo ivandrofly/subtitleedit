@@ -1,4 +1,5 @@
 ﻿using Nikse.SubtitleEdit.Core.Common;
+using Nikse.SubtitleEdit.Core.Enums;
 using Nikse.SubtitleEdit.Core.Interfaces;
 using Nikse.SubtitleEdit.Core.SubtitleFormats;
 using System;
@@ -16,6 +17,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
             public static string XFixedToYZ { get; set; } = "{0} fixed to: {1}{2}";
             public static string UnableToFixTextXY { get; set; } = "Unable to fix text number {0}: {1}";
         }
+
+        public FixType FixType => FixType.Time;
 
         public void Fix(Subtitle subtitle, IFixCallbacks callbacks)
         {
@@ -107,6 +110,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                             if (!canBeEqual)
                             {
                                 bool okEqual = true;
+                                var changedCurrent = false;
                                 if (prev.DurationTotalMilliseconds > Configuration.Settings.General.SubtitleMinimumDisplayMilliseconds)
                                 {
                                     prev.EndTime.TotalMilliseconds--;
@@ -114,6 +118,7 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                                 else if (p.DurationTotalMilliseconds > Configuration.Settings.General.SubtitleMinimumDisplayMilliseconds)
                                 {
                                     p.StartTime.TotalMilliseconds++;
+                                    changedCurrent = true;
                                 }
                                 else
                                 {
@@ -123,7 +128,19 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                                 if (okEqual)
                                 {
                                     noOfOverlappingDisplayTimesFixed++;
-                                    callbacks.AddFixToListView(target, fixAction, oldPrevious, prev.ToString());
+
+                                    // Report the paragraph that actually moved. This branch changes
+                                    // "p" while prev is untouched, so reporting prev produced a fix
+                                    // row whose before and after were identical and hid the real
+                                    // change - every other branch reports the one it modified.
+                                    if (changedCurrent)
+                                    {
+                                        callbacks.AddFixToListView(p, fixAction, oldCurrent, p.ToString());
+                                    }
+                                    else
+                                    {
+                                        callbacks.AddFixToListView(target, fixAction, oldPrevious, prev.ToString());
+                                    }
                                 }
                             }
                         }

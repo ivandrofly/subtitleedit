@@ -17,6 +17,9 @@ public class SeBatchConvert
     public string TesseractLanguage { get; set; }
     public int TesseractEngineMode { get; set; }
     public string PaddleLanguage { get; set; }
+
+    /// <summary>Apple Vision's recognition language, as its BCP-47 tag. macOS only.</summary>
+    public string AppleVisionLanguage { get; set; }
     public string BinaryOcrDatabase { get; set; }
     public string NOcrBinaryOcrFallbackDatabase { get; set; }
     public string BinaryOcrNOcrFallbackDatabase { get; set; }
@@ -79,11 +82,23 @@ public class SeBatchConvert
     public string AssaChangeStyleToStyle { get; set; }
     public bool AssaChangeStyleTrimUnusedStyles { get; set; }
 
+    public bool AssaChangeStylePropertiesSetSpacing { get; set; }
+    public decimal AssaChangeStylePropertiesSpacing { get; set; }
+    public bool AssaChangeStylePropertiesSetAlignment { get; set; }
+    public string AssaChangeStylePropertiesAlignment { get; set; }
+
     public bool SaveInSourceFolder { get; set; }
 
     public string AutoTranslateEngine { get; set; }
     public string AutoTranslateSourceLanguage { get; set; }
     public string AutoTranslateTargetLanguage { get; set; }
+
+    /// <summary>
+    /// Batch convert's own "use external server" switch for the llama.cpp engines - independent of
+    /// the Auto-translate window's <see cref="SeAutoTranslate.LlamaCppUseRemoteServer"/> (#14005).
+    /// The server URL itself is shared via <see cref="SeAutoTranslate.LlamaCppApiUrl"/>.
+    /// </summary>
+    public bool LlamaCppUseRemoteServer { get; set; }
 
     public string ChangeCasingType { get; set; }
     public bool NormalCasingFixNames { get; set; }
@@ -143,10 +158,15 @@ public class SeBatchConvert
         SaveInSourceFolder = true;
         TargetFormat = string.Empty;
         TargetEncoding = string.Empty;
-        OcrEngine = "Tesseract";
+        // See SeOcr.Engine: on macOS the built-in recognizer needs no install, while the
+        // Tesseract default would send a fresh Mac user to Homebrew before the first batch run.
+        OcrEngine = System.OperatingSystem.IsMacOS()
+            ? Features.Ocr.Engines.AppleVisionOcr.StaticName
+            : "Tesseract";
         TesseractLanguage = "eng";
         TesseractEngineMode = 3; // Default, based on what is available (tesseract --oem)
         PaddleLanguage = "en";
+        AppleVisionLanguage = "en-US";
         BinaryOcrDatabase = "Latin";
         NOcrBinaryOcrFallbackDatabase = string.Empty;
         BinaryOcrNOcrFallbackDatabase = string.Empty;
@@ -172,6 +192,10 @@ public class SeBatchConvert
         AssaChangeStyleFromStyle = string.Empty;
         AssaChangeStyleToStyle = string.Empty;
         AssaChangeStyleTrimUnusedStyles = false;
+        AssaChangeStylePropertiesSetSpacing = true;
+        AssaChangeStylePropertiesSpacing = 0;
+        AssaChangeStylePropertiesSetAlignment = false;
+        AssaChangeStylePropertiesAlignment = "an2";
         AutoTranslateEngine = new OllamaTranslate().Name;
         AutoTranslateSourceLanguage = "auto";
         AutoTranslateTargetLanguage = "en";

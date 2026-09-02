@@ -170,11 +170,11 @@ Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 var text = p.Text.Replace(Environment.NewLine, "\\N");
                 if (p.IsComment)
                 {
-                    sb.AppendLine(string.Format(commentWriteFormat, start, end, AdvancedSubStationAlpha.FormatText(text), style, p.Layer, actor, marginL, marginR, marginV, effect));
+                    sb.AppendLine(string.Format(commentWriteFormat, start, end, AdvancedSubStationAlpha.FormatText(text), style, p.Layer.ToString(CultureInfo.InvariantCulture), actor, marginL, marginR, marginV, effect));
                 }
                 else
                 {
-                    sb.AppendLine(string.Format(paragraphWriteFormat, start, end, AdvancedSubStationAlpha.FormatText(text), style, p.Layer, actor, marginL, marginR, marginV, effect));
+                    sb.AppendLine(string.Format(paragraphWriteFormat, start, end, AdvancedSubStationAlpha.FormatText(text), style, p.Layer.ToString(CultureInfo.InvariantCulture), actor, marginL, marginR, marginV, effect));
                 }
             }
 
@@ -348,7 +348,9 @@ Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
                         const string styleFormat = "Style: {0},{1},{2},{3},65535,65535,-2147483640,-1,0,1,3,0,2,10,10,10,0,1";
 
-                        ttStyles.AppendLine(string.Format(styleFormat, name, fontFamily, fSize, c.ToArgb()));
+                        // SSA colours are BGR words; ToArgb() wrote ARGB and swapped red and blue on every
+                        // TTML-derived style (the GetStyle path was fixed for this in #13734)
+                        ttStyles.AppendLine(string.Format(CultureInfo.InvariantCulture, styleFormat, name, fontFamily, fSize, ColorTranslator.ToWin32(c)));
                     }
                 }
 

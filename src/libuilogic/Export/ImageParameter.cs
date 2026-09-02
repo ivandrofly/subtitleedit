@@ -42,6 +42,20 @@ public class ImageParameter
     /// </summary>
     public SKColor FullFrameBackgroundColor { get; set; } = SKColors.Transparent;
 
+    /// <summary>
+    /// Transparency of the whole rendered subtitle, 0-100, from an ASSA "{\alpha&amp;H80&amp;}"
+    /// tag (see <see cref="ExportTextTags.ApplyTransparencyTags"/>). 100 - fully opaque - unless
+    /// the text asks for less.
+    /// </summary>
+    public int AlphaPercent { get; set; } = 100;
+
+    /// <summary>
+    /// The "{\fad(..)}"/"{\fade(..)}" curve of the subtitle, or null when it has no fade tag.
+    /// Only used by the Blu-ray sup writer, which can fade with palette updates; the other
+    /// image formats have no way to animate a subtitle and ignore it.
+    /// </summary>
+    public List<ExportFadeKeyframe>? FadeKeyframes { get; set; }
+
     public double FramesPerSecond { get; set; }
     public bool IsRightToLeft { get; set; } = false;
     public ExportBoxType BoxType { get; set; } = ExportBoxType.None;
@@ -49,6 +63,14 @@ public class ImageParameter
     public int BoxPaddingRight { get; set; } = 0;
     public int BoxPaddingTop { get; set; } = 0;
     public int BoxPaddingBottom { get; set; } = 0;
+
+    /// <summary>
+    /// Advanced text formatting (gradient fills, multiple outlines, soft shadows, glow, 3D
+    /// extrude, bevel). Null renders through the classic fill/outline/shadow path; when set,
+    /// <see cref="OutlineWidth"/> and <see cref="ShadowWidth"/> are ignored - the effects
+    /// describe the whole look.
+    /// </summary>
+    public TextEffects? TextEffects { get; set; }
 
     public ImageParameter()
     {
@@ -66,6 +88,25 @@ public class ImageParameter
     /// </summary>
     public SKPoint? OverridePositionPoint =>
         OverridePosition.HasValue ? new SKPoint(OverridePosition.Value.X, OverridePosition.Value.Y) : null;
+
+    /// <summary>
+    /// <see cref="ContentAlignment"/> with <see cref="ExportContentAlignment.FromAlignment"/>
+    /// resolved against <see cref="Alignment"/> - the alignment the "{\anX}" tag of the line
+    /// already put on the parameter. Left/right placed subtitles then get left/right justified
+    /// lines instead of the one justification picked for the whole export (issue #14202).
+    /// </summary>
+    public ExportContentAlignment ResolvedContentAlignment => ContentAlignment switch
+    {
+        ExportContentAlignment.FromAlignment => Alignment switch
+        {
+            ExportAlignment.TopLeft or ExportAlignment.MiddleLeft or ExportAlignment.BottomLeft
+                => ExportContentAlignment.Left,
+            ExportAlignment.TopRight or ExportAlignment.MiddleRight or ExportAlignment.BottomRight
+                => ExportContentAlignment.Right,
+            _ => ExportContentAlignment.Center,
+        },
+        _ => ContentAlignment,
+    };
 
     public BluRayContentAlignment BluRayContentAlignment => Alignment switch
     {

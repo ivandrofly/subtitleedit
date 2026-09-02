@@ -32,10 +32,15 @@ Built-in trainable OCR engine.
 - Best for consistent fonts (like DVD/Blu-ray subtitles)
 
 ### Binary OCR
-Binary image comparison engine.
+Binary image comparison engine, listed as **Binary image compare** in the engine dropdown.
 - Compares against a database of known character images
 - Fast and accurate for known fonts
 - Supports database editing, character history, max error percentage, and pixels-are-space tuning
+
+### Apple Vision
+Built-in OCR on macOS using Apple's Vision framework.
+- macOS only; nothing to download or configure
+- Good accuracy on clean subtitle images
 
 ### Google Lens Sharp / Google Lens Standalone
 Cloud-based OCR using Google Lens (free, but capped).
@@ -53,7 +58,7 @@ Local LLM-based OCR via an Ollama server (e.g. with a vision model).
 ### llama.cpp
 Local LLM-based OCR using a llama.cpp-compatible server. Subtitle Edit can download llama.cpp and the model for you, or talk to a server you run yourself.
 - Default endpoint: `http://127.0.0.1:8080/v1/chat/completions`
-- Curated vision models: **GLM-OCR 0.9B** (Q8_0, about 1.4 GB), **LightOnOCR 1B** (Q8_0, about 1.2 GB), **PaddleOCR-VL 1.6** (about 1.8 GB, 109 languages) and **HunyuanOCR 1.5** (Q8_0, about 1.3 GB — the fastest of the four). Custom `*.gguf` files placed in the llama.cpp models folder also appear in the list
+- Curated vision models, listed best-first for subtitles: **GLM-OCR 0.9B** (Q8_0, about 1.4 GB — the default, and the most accurate on subtitle images), **PaddleOCR-VL 1.6** (about 1.8 GB, 109 languages), **HunyuanOCR 1.5** (Q8_0, about 1.3 GB) and **LightOnOCR 1B** (Q8_0, about 1.2 GB — the least accurate and much the slowest). Custom vision models also appear in the list: put the `*.gguf` in the llama.cpp models folder together with its `mmproj` vision projector, named either `mmproj-<file>.gguf` or `<file>-mmproj.gguf` (the two naming schemes used on Hugging Face). A `*.gguf` without a projector next to it is not offered — it cannot see the image
 - The settings dialog has a download/update button for the llama.cpp engine itself; the dot next to it turns amber when a newer build than the one installed is available
 
 ### CrispEmbed
@@ -91,6 +96,33 @@ Local OCR engine.
 5. Click **Start OCR**
 6. Review and correct any errors
 7. Click **OK** to import the text subtitles
+
+## Options
+
+Checkboxes below the engine settings:
+
+- **Fix OCR errors**, **Prompt for unknown words**, **Try to guess unknown words** — Shown once a dictionary is loaded
+- **Auto break if more than X lines** — X is the *Max number of lines* rule from Settings
+
+Toggle buttons above the image:
+
+- **Auto-detect ASSA alignment** — Capture top alignment
+- **Image pre-processing** — Opens the [pre-processing](#pre-processing) settings
+- **VobSub/DVD colors...** — VobSub/DVD input only
+- **Fallback OCR database** — nOCR and Binary image compare only
+- **Show only forced subtitles** — Only when the file has forced subtitles
+
+## Subtitle List Menu
+
+Right-click the subtitle list for:
+
+- **OCR selected lines**
+- **Inspect line...** — nOCR and Binary image compare only
+- **Show image**, **Save image as...**, **Copy image to clipboard**
+- **Delete**, and **Fill selected lines with clipboard text** when several lines are selected
+- **Italic**, **Bold**
+- **Edit/export...**, **Import text from subtitle...**, **Export text as subtitle...**
+- **Save all images with HTML index...** — See [Saving the Images](#saving-the-images)
 
 ## Saving the Images
 
@@ -162,6 +194,8 @@ When the OCR engine encounters uncertain characters, you can:
 - Choose from suggested alternatives
 - Type the correct text
 - Add to the OCR fix dictionary for automatic correction
+
+The unknown-words list in the OCR window has buttons for the selected word: **Add to names list (case sensitive)**, **Add to user dictionary**, **Add to OCR replace pairs** and **Google it**.
 
 ### What is remembered
 

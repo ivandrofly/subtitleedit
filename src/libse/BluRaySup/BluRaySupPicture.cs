@@ -104,6 +104,13 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
         public List<List<PaletteInfo>> Palettes { get; set; } = new List<List<PaletteInfo>>();
 
         /// <summary>
+        /// Alpha levels for a fade in/out, in presentation order. A step at <see cref="StartTime"/>
+        /// sets the alpha the caption appears with; every later step becomes a palette update
+        /// display set. Empty (the default) writes the caption fully opaque, as before.
+        /// </summary>
+        public List<BluRaySupFadeStep> FadeSteps { get; set; } = new List<BluRaySupFadeStep>();
+
+        /// <summary>
         /// Create RLE buffer from bitmap
         /// </summary>
         /// <param name="bm">Bitmap to compress</param>
@@ -120,6 +127,11 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
                     lookup.Add(color, i);
                 }
             }
+
+            // Cap on the approximate-match memo below. A caption repeats its anti-aliasing
+            // colours on every row, but a photographic source can hold millions of distinct
+            // ones - past the cap the linear scan simply runs again, as it always did.
+            const int maxCachedColors = 1 << 16;
 
             var transparentColor = (byte)palette[palette.Count - 1];
             var bytes = new List<byte>(bm.Width * 2);
@@ -145,7 +157,15 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
                     }
                     else
                     {
+                        // FindBestMatch is a linear scan over the (up to 255 entry) palette and
+                        // the palette does not change while encoding, so the answer for a color
+                        // is fixed. Anti-aliased edges hit this for the same handful of colors
+                        // on every row of the caption; remember them in the same lookup.
                         color = FindBestMatch(c, palette);
+                        if (lookup.Count < maxCachedColors)
+                        {
+                            lookup[c] = color;
+                        }
                     }
 
                     for (len = 1; x + len < bm.Width; len++)
@@ -361,6 +381,15 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
             lookup = new HashSet<SKColor>();
             pal.Add(fontColor);
             lookup.Add(fontColor);
+
+            // Colors already known to have a close palette entry. HasCloseColor is a linear scan
+            // over the palette, and this pass reached it for every pixel of every anti-aliased
+            // edge - a 1920x200 caption ran it hundreds of thousands of times over a palette
+            // growing towards 254 entries. A rejection can never be undone: the palette only
+            // grows, and the tolerance only widens as it does (1 -> 5 -> 25), so a color that
+            // had a close entry once still has one later. Rejections take no palette slot, so
+            // caching one can never skip an insertion.
+            var rejected = new HashSet<SKColor>();
             for (var y = 0; y < bitmap.Height; y++)
             {
                 reader.ReadRow(y, row);
@@ -373,12 +402,20 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
                         {
                             // exact color already exists
                         }
+                        else if (rejected.Contains(c))
+                        {
+                            // a close enough color already exists
+                        }
                         else if (pal.Count < 100)
                         {
                             if (!HasCloseColor(c, pal, 1))
                             {
                                 pal.Add(c);
                                 lookup.Add(c);
+                            }
+                            else
+                            {
+                                rejected.Add(c);
                             }
                         }
                         else if (pal.Count < 240)
@@ -388,13 +425,31 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
                                 pal.Add(c);
                                 lookup.Add(c);
                             }
+                            else
+                            {
+                                rejected.Add(c);
+                            }
                         }
-                        else if (pal.Count < 254 && !HasCloseColor(c, pal, 25))
+                        else if (pal.Count < 254)
                         {
-                            pal.Add(c);
-                            lookup.Add(c);
+                            if (!HasCloseColor(c, pal, 25))
+                            {
+                                pal.Add(c);
+                                lookup.Add(c);
+                            }
+                            else
+                            {
+                                rejected.Add(c);
+                            }
                         }
                     }
+                }
+
+                // Every branch above requires pal.Count < 254, so a full palette freezes the
+                // result - the rest of the image only cost scans that could not change it.
+                if (pal.Count >= 254)
+                {
+                    break;
                 }
             }
 
@@ -445,6 +500,78 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
         private static long _lastEndTimeForWrite = -1000;
 
         /// <summary>
+        /// Splits <see cref="FadeSteps"/> into the alpha the caption appears with (part of the
+        /// epoch's own palette) and the steps that follow it as palette update display sets.
+        /// Steps outside the caption, and steps that do not change the alpha, are dropped - each
+        /// one would cost a display set for nothing.
+        /// </summary>
+        private static List<BluRaySupFadeStep> GetFadeSteps(BluRaySupPicture pic, out int startAlphaPercent)
+        {
+            startAlphaPercent = 100;
+            var updates = new List<BluRaySupFadeStep>();
+            if (pic.FadeSteps == null || pic.FadeSteps.Count == 0)
+            {
+                return updates;
+            }
+
+            var sorted = new List<BluRaySupFadeStep>(pic.FadeSteps);
+            sorted.Sort((a, b) => a.TimeMs.CompareTo(b.TimeMs));
+
+            var lastAlpha = 100;
+            var lastTime = long.MinValue;
+            foreach (var step in sorted)
+            {
+                var alpha = Math.Min(100, Math.Max(0, step.AlphaPercent));
+                if (step.TimeMs <= pic.StartTime)
+                {
+                    startAlphaPercent = alpha;
+                    lastAlpha = alpha;
+                    continue;
+                }
+
+                if (step.TimeMs >= pic.EndTime || alpha == lastAlpha || step.TimeMs == lastTime)
+                {
+                    continue;
+                }
+
+                updates.Add(new BluRaySupFadeStep(step.TimeMs, alpha));
+                lastAlpha = alpha;
+                lastTime = step.TimeMs;
+            }
+
+            return updates;
+        }
+
+        /// <summary>
+        /// Writes a Palette Definition Segment with every alpha scaled by
+        /// <paramref name="alphaPercent"/> - the whole of a Blu-ray fade is this one number
+        /// changing between display sets.
+        /// </summary>
+        private static int WritePds(byte[] buf, int index, byte[] packetHeader, BluRaySupPalette pal, int palSize, int paletteVersion, int alphaPercent)
+        {
+            packetHeader[10] = 0x14;                                      // ID (keep PTS & DTS)
+            ToolBox.SetWord(packetHeader, 11, 2 + palSize * 5);      // size
+            for (var i = 0; i < packetHeader.Length; i++)
+            {
+                buf[index++] = packetHeader[i];
+            }
+
+            buf[index++] = 0;                                             // palette_id
+            buf[index++] = (byte)paletteVersion;                          // palette_version_number
+            var alpha = pal.GetAlpha();
+            for (var i = 0; i < palSize; i++)
+            {
+                buf[index++] = (byte)i;                                   // index
+                buf[index++] = pal.GetY()[i];                             // Y
+                buf[index++] = pal.GetCr()[i];                            // Cr
+                buf[index++] = pal.GetCb()[i];                            // Cb
+                buf[index++] = (byte)(alpha[i] * alphaPercent / 100);     // Alpha
+            }
+
+            return index;
+        }
+
+        /// <summary>
         /// Create the binary stream representation of one caption
         /// </summary>
         /// <param name="pic">SubPicture object containing caption info - note that first Composition Number should be 0, then 2, 4, 8, etc.</param>
@@ -482,7 +609,8 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
             }
             else
             {
-                numAddPackets = 1 + (rleBuf.Length - 0xffe4) / 0xffeb;
+                // round up, but without an extra empty packet when the rest divides evenly
+                numAddPackets = (rleBuf.Length - 0xffe4 + 0xffeb - 1) / 0xffeb;
             }
 
             // a typical frame consists of 8 packets. It can be elongated by additional object frames
@@ -542,14 +670,20 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
             {
                 0x00, 0x00,             // 0: object_id
                 0x00,                   // 2: object_version_number
-                0x40                    // 3: first_in_sequence (0x80), last_in_sequence (0x40), 6bits reserved
+                0x00                    // 3: first_in_sequence (0x80), last_in_sequence (0x40), 6bits reserved
+                                        //    set per packet below - only the final one is last_in_sequence
             };
 
-            var size = packetHeader.Length * (8 + numAddPackets);
+            // Fade steps ride along as palette update display sets (PCS + PDS + END) between the
+            // caption and the screen clear - same object, only the palette alpha changes.
+            var fadeSteps = GetFadeSteps(pic, out var startAlphaPercent);
+
+            var size = packetHeader.Length * (8 + numAddPackets + fadeSteps.Count * 3);
             size += headerPcsStart.Length + headerPcsEnd.Length;
             size += 2 * headerWds.Length + headerOdsFirst.Length;
             size += numAddPackets * headerOdsNext.Length;
             size += (2 + palSize * 5) /* PDS */;
+            size += fadeSteps.Count * (headerPcsStart.Length + 2 + palSize * 5);
             size += rleBuf.Length;
 
             switch (alignment)
@@ -679,23 +813,7 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
             }
 
             // write PDS - Palette Definition Segment
-            packetHeader[10] = 0x14;                                            // ID (keep PTS & DTS)
-            ToolBox.SetWord(packetHeader, 11, 2 + palSize * 5);        // size
-            for (var i = 0; i < packetHeader.Length; i++)
-            {
-                buf[index++] = packetHeader[i];
-            }
-
-            buf[index++] = 0;
-            buf[index++] = 0;
-            for (var i = 0; i < palSize; i++)
-            {
-                buf[index++] = (byte)i;                                         // index
-                buf[index++] = pal.GetY()[i];                                   // Y
-                buf[index++] = pal.GetCr()[i];                                  // Cr
-                buf[index++] = pal.GetCb()[i];                                  // Cb
-                buf[index++] = pal.GetAlpha()[i];                               // Alpha
-            }
+            index = WritePds(buf, index, packetHeader, pal, palSize, 0, startAlphaPercent);
 
             // write first OBJ
             var bufSize = rleBuf.Length;
@@ -742,6 +860,8 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
                     buf[index++] = packetHeader[i];
                 }
 
+                // only the final fragment carries last_in_sequence - middle ones must be 0x00
+                headerOdsNext[3] = (byte)(p == numAddPackets - 1 ? 0x40 : 0x00);
                 for (var i = 0; i < headerOdsNext.Length; i++)
                 {
                     buf[index++] = headerOdsNext[i];
@@ -763,6 +883,47 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
                 buf[index++] = packetHeader[i];
             }
 
+            // write the fade steps - one palette update display set each (PCS + PDS + END). The
+            // PCS repeats the composition of the epoch start with palette_update_flag set, which
+            // tells the decoder to keep the object it already has and only take the new palette.
+            var endPts = pic.EndTimeForWrite;
+            var compositionNumber = pic.CompositionNumber;
+            headerPcsStart[7] = 0x00;                                            // composition_state: normal case
+            headerPcsStart[8] = 0x80;                                            // palette_update_flag
+            for (var step = 0; step < fadeSteps.Count; step++)
+            {
+                // A step may only be scheduled after the caption is up and before it is taken
+                // down; the start PTS can have been nudged by the small gap removal above.
+                var stepPts = Math.Min(Math.Max(fadeSteps[step].TimeForWrite, pts + 1), endPts - 1);
+
+                compositionNumber++;
+                packetHeader[10] = 0x16;                                         // ID
+                ToolBox.SetDWord(packetHeader, 2, (uint)stepPts);           // PTS
+                ToolBox.SetDWord(packetHeader, 6, 0);                       // DTS (0 = unset)
+                ToolBox.SetWord(packetHeader, 11, headerPcsStart.Length);   // size
+                for (var i = 0; i < packetHeader.Length; i++)
+                {
+                    buf[index++] = packetHeader[i];
+                }
+
+                ToolBox.SetWord(headerPcsStart, 5, compositionNumber);
+                for (var i = 0; i < headerPcsStart.Length; i++)
+                {
+                    buf[index++] = headerPcsStart[i];
+                }
+
+                // The palette version has to move for the decoder to take the update; it is a
+                // byte, so it wraps on captions with more than 255 steps.
+                index = WritePds(buf, index, packetHeader, pal, palSize, (step + 1) & 0xff, fadeSteps[step].AlphaPercent);
+
+                packetHeader[10] = 0x80;                                         // END (keep PTS & DTS)
+                ToolBox.SetWord(packetHeader, 11, 0);                       // size
+                for (var i = 0; i < packetHeader.Length; i++)
+                {
+                    buf[index++] = packetHeader[i];
+                }
+            }
+
             // write PCS end
             packetHeader[10] = 0x16;                                            // ID
             ToolBox.SetDWord(packetHeader, 2, (uint)pic.EndTimeForWrite);        // PTS
@@ -776,7 +937,7 @@ namespace Nikse.SubtitleEdit.Core.BluRaySup
             ToolBox.SetWord(headerPcsEnd, 0, pic.Width);
             ToolBox.SetWord(headerPcsEnd, 2, h);                                // cropped height
             ToolBox.SetByte(headerPcsEnd, 4, fpsId);
-            ToolBox.SetWord(headerPcsEnd, 5, pic.CompositionNumber + 1);
+            ToolBox.SetWord(headerPcsEnd, 5, compositionNumber + 1);
             for (var i = 0; i < headerPcsEnd.Length; i++)
             {
                 buf[index++] = headerPcsEnd[i];

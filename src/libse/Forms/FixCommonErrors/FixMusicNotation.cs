@@ -1,4 +1,5 @@
 ﻿using Nikse.SubtitleEdit.Core.Common;
+using Nikse.SubtitleEdit.Core.Enums;
 using Nikse.SubtitleEdit.Core.Interfaces;
 using System;
 
@@ -10,6 +11,8 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
         {
             public static string FixMusicNotation { get; set; } = "Replace music symbols (e.g. âTª) with preferred symbol";
         }
+
+        public FixType FixType => FixType.Characters;
 
         public void Fix(Subtitle subtitle, IFixCallbacks callbacks)
         {
@@ -57,7 +60,10 @@ namespace Nikse.SubtitleEdit.Core.Forms.FixCommonErrors
                                 if (count == 1)
                                 {
                                     var idx = newText.IndexOf('#');
-                                    if (idx < newText.Length - 2)
+                                    // newText[idx + 1] only needs idx + 1 <= Length - 1. With
+                                    // "- 2" a '#' as the second-to-last character skipped the
+                                    // chord guard entirely, so "F#m" became "F(music note)m".
+                                    if (idx < newText.Length - 1)
                                     {
                                         if (char.IsLetterOrDigit(newText[idx + 1]))
                                         {

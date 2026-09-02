@@ -12,6 +12,7 @@ using Nikse.SubtitleEdit.Features.Video.TextToSpeech.DownloadTts;
 using Nikse.SubtitleEdit.Features.Video.TextToSpeech.ElevenLabsSettings;
 using Nikse.SubtitleEdit.Features.Video.TextToSpeech.Engines;
 using Nikse.SubtitleEdit.Features.Video.TextToSpeech.Voices;
+using Nikse.SubtitleEdit.Features.Video.TextToSpeech.VoiceCloneConsent;
 using Nikse.SubtitleEdit.Logic;
 using Nikse.SubtitleEdit.Logic.Config;
 using Nikse.SubtitleEdit.Logic.Media;
@@ -116,6 +117,12 @@ public partial class ReviewSpeechViewModel : ObservableObject
     // picker was last used (#13881).
     public string SubtitleFileName { get; set; } = string.Empty;
 
+    // What the video says during a paragraph - the transcript for a reference clip cut here (see
+    // ResolvePerLineCloneVoiceAsync). Supplied by the TTS window, which knows the original-language
+    // subtitle a translation was dubbed from; null when it does not, and the line's own text is
+    // then the best guess left.
+    public Func<Paragraph, string>? ReferenceTextOf { get; set; }
+
     public bool OkPressed { get; private set; }
 
     // Text edits made in this window, published on OK so the caller can offer to apply them to
@@ -169,7 +176,8 @@ public partial class ReviewSpeechViewModel : ObservableObject
         _cancellationToken = _cancellationTokenSource.Token;
 
         _playLock = new Lock();
-        _timer = new Timer(200);
+        // 100 ms: also drives the waveform playhead during playback, 200 ms looked steppy.
+        _timer = new Timer(100);
         _timer.Elapsed += OnTimerOnElapsed;
         _timer.Start();
     }
@@ -190,6 +198,7 @@ public partial class ReviewSpeechViewModel : ObservableObject
             // unguarded IsPaused read raced the dispose (NRE / native use-after-free window).
             var stopped = false;
             var paused = false;
+            var positionSeconds = 0.0;
             lock (_playLock)
             {
                 if (_cancellationTokenSource.IsCancellationRequested || _mpvContext == null)
@@ -199,6 +208,7 @@ public partial class ReviewSpeechViewModel : ObservableObject
                 else
                 {
                     paused = _mpvContext.IsPaused;
+                    positionSeconds = _mpvContext.Position;
                 }
             }
 
@@ -206,6 +216,15 @@ public partial class ReviewSpeechViewModel : ObservableObject
             {
                 await Dispatcher.UIThread.InvokeAsync(ResetPlaybackUiState);
                 return;
+            }
+
+            // The clip plays from the cue's start, so the waveform playhead is start + clip
+            // position - the user sees where in the cue the speech currently is (#14000).
+            var playingRow = _playingRow;
+            if (!paused && playingRow?.WaveformParagraph != null)
+            {
+                var playheadSeconds = playingRow.WaveformParagraph.StartTime.TotalSeconds + positionSeconds;
+                await Dispatcher.UIThread.InvokeAsync(() => SetWaveformPlayhead(playheadSeconds));
             }
 
             // The row that is actually playing - not SelectedLine: two-way grid selection meant
@@ -384,12 +403,16 @@ public partial class ReviewSpeechViewModel : ObservableObject
             {
                 Include = p.Include,
                 Number = p.Paragraph.Number,
-                Text = p.Text,
+                // The subtitle's own text, not the tag-stripped/unbroken copy that was fed to
+                // the engine: edits made here are published back to the main subtitle, so
+                // starting from the stripped copy silently dropped italics and line breaks
+                // from every line the user touched. Synthesis strips at the point of use.
+                Text = p.Paragraph.Text,
                 Voice = p.Voice == null ? string.Empty : p.Voice.ToString(),
                 Speed = Math.Round(p.SpeedFactor, 2).ToString(CultureInfo.CurrentCulture),
                 Cps = Math.Round(p.Paragraph.GetCharactersPerSecond(), 2).ToString(CultureInfo.CurrentCulture),
                 StepResult = p,
-                OriginalText = p.Text,
+                OriginalText = p.Paragraph.Text,
                 OriginalStartMs = p.Paragraph.StartTime.TotalMilliseconds,
                 OriginalEndMs = p.Paragraph.EndTime.TotalMilliseconds,
             };
@@ -474,6 +497,221 @@ public partial class ReviewSpeechViewModel : ObservableObject
         row.Cps = Math.Round(paragraph.GetCharactersPerSecond(), 2).ToString(CultureInfo.CurrentCulture);
     }
 
+    private void SetWaveformPlayhead(double seconds)
+    {
+        var av = AudioVisualizer;
+        if (av == null)
+        {
+            return;
+        }
+
+        av.CurrentVideoPositionSeconds = seconds;
+        av.InvalidateVisual();
+    }
+
+    // Length of each row's generated clip, keyed by file name: a regenerate always writes a new
+    // file, so a stale entry can never be served for a changed clip. Non-WAV or unreadable files
+    // yield 0, which the visualizer treats as "no bar".
+    private readonly Dictionary<string, double> _audioLengthCache = new();
+
+    public double GetGeneratedAudioLengthSeconds(ReviewRow row)
+    {
+        var fileName = row.StepResult.CurrentFileName;
+        if (string.IsNullOrEmpty(fileName))
+        {
+            return 0;
+        }
+
+        if (_audioLengthCache.TryGetValue(fileName, out var cached))
+        {
+            return cached;
+        }
+
+        var seconds = 0.0;
+        try
+        {
+            if (File.Exists(fileName))
+            {
+                using var stream = File.OpenRead(fileName);
+                var header = new WaveHeader2(stream);
+                if (header.ChunkId == "RIFF" && header.Format == "WAVE" && header.BytesPerSecond > 0)
+                {
+                    seconds = header.LengthInSeconds;
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            SeLogger.Error(exception, $"ReviewSpeech: cannot read audio length of \"{fileName}\"");
+        }
+
+        _audioLengthCache[fileName] = seconds;
+        return seconds;
+    }
+
+    // Provider for AudioVisualizer.ParagraphAudioLengthProvider - the visualizer hands back the
+    // mirror instance it draws, so an instance lookup is right here (unlike the event args).
+    public double GetWaveformParagraphAudioLength(SubtitleLineViewModel waveformParagraph)
+    {
+        return _waveformParagraphToRow.TryGetValue(waveformParagraph, out var row) ? GetGeneratedAudioLengthSeconds(row) : 0;
+    }
+
+    // "Fit duration to generated audio": the cue ends exactly where the speech ends - what the
+    // user otherwise does by dragging the right edge to the end of the red overrun bar.
+    [RelayCommand]
+    private void FitDurationToAudio(ReviewRow? row)
+    {
+        row ??= SelectedLine;
+        var wp = row?.WaveformParagraph;
+        if (row == null || wp == null)
+        {
+            return;
+        }
+
+        var seconds = GetGeneratedAudioLengthSeconds(row);
+        if (seconds <= 0)
+        {
+            return;
+        }
+
+        wp.EndTime = wp.StartTime + TimeSpan.FromSeconds(seconds);
+        wp.UpdateDuration();
+        AudioVisualizer?.InvalidateVisual();
+    }
+
+    // Restores the times the line had when the window opened (waveform drags have no undo).
+    [RelayCommand]
+    private void ResetTiming(ReviewRow? row)
+    {
+        row ??= SelectedLine;
+        var wp = row?.WaveformParagraph;
+        if (row == null || wp == null)
+        {
+            return;
+        }
+
+        wp.StartTime = TimeSpan.FromMilliseconds(row.OriginalStartMs);
+        wp.EndTime = TimeSpan.FromMilliseconds(row.OriginalEndMs);
+        wp.UpdateDuration();
+        AudioVisualizer?.InvalidateVisual();
+    }
+
+    // Shifts the selected cue as a whole (duration kept), used by the waveform's keyboard nudge.
+    private void NudgeSelectedLine(double milliseconds)
+    {
+        var wp = SelectedLine?.WaveformParagraph;
+        if (wp == null)
+        {
+            return;
+        }
+
+        var start = Math.Max(0, wp.StartTime.TotalMilliseconds + milliseconds);
+        var duration = wp.Duration.TotalMilliseconds;
+        wp.StartTime = TimeSpan.FromMilliseconds(start);
+        wp.EndTime = TimeSpan.FromMilliseconds(start + duration);
+        wp.UpdateDuration();
+        AudioVisualizer?.InvalidateVisual();
+    }
+
+    // Right-click on the waveform: the row under the pointer becomes the context-menu target
+    // (and the selection) whether or not "right click selects" is on; an empty-area right-click
+    // keeps the current selection. Returns the target row or null.
+    public ReviewRow? SelectRowAtWaveformPosition(double seconds)
+    {
+        var wp = WaveformParagraphs.Find(p => p.StartTime.TotalSeconds <= seconds && seconds <= p.EndTime.TotalSeconds);
+        if (wp != null)
+        {
+            SelectFromWaveform(wp);
+        }
+
+        return SelectedLine;
+    }
+
+    // A left-click on empty waveform just parks the playhead there; the review window has no
+    // video to seek, so nothing plays until the user presses Play.
+    public void OnWaveformPositionClicked(double seconds)
+    {
+        if (_playingRow == null)
+        {
+            SetWaveformPlayhead(seconds);
+        }
+    }
+
+    // Keys that act on the waveform when it has focus (the grid handles its own Up/Down):
+    // Home/End jump to the first/last row; Ctrl+Left/Right nudge the selected cue 100 ms
+    // (10 ms with Shift) without changing its duration.
+    public bool OnWaveformKeyDown(KeyEventArgs e)
+    {
+        if (Lines.Count == 0)
+        {
+            return false;
+        }
+
+        var ctrl = e.KeyModifiers.HasFlag(OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        if (e.Key == Key.Home && e.KeyModifiers == KeyModifiers.None)
+        {
+            SelectedLine = Lines[0];
+            LineGrid.ScrollIntoView(Lines[0]);
+            return true;
+        }
+
+        if (e.Key == Key.End && e.KeyModifiers == KeyModifiers.None)
+        {
+            SelectedLine = Lines[^1];
+            LineGrid.ScrollIntoView(Lines[^1]);
+            return true;
+        }
+
+        if (ctrl && e.Key is Key.Left or Key.Right)
+        {
+            var step = shift ? 10 : 100;
+            NudgeSelectedLine(e.Key == Key.Left ? -step : step);
+            return true;
+        }
+
+        return false;
+    }
+
+    // True while a selection change originates from a click/drag on the waveform itself. The
+    // block the user grabbed is already in view, so RefreshWaveformPosition must only update the
+    // highlight and not recenter - recentering would jump the view (and the block under the
+    // pointer) mid-drag (#14000).
+    private bool _selectionFromWaveform;
+
+    // Click/drag on a waveform block selects the row that owns it, which in turn loads its text
+    // and per-line settings into the edit panel through OnSelectedLineChanged (#14000).
+    //
+    // The event args carry a *copy* of the paragraph (ParagraphEventArgs clones it), so the
+    // lookup goes by Id, which the copy preserves - never by instance.
+    public void SelectFromWaveform(SubtitleLineViewModel? waveformParagraph)
+    {
+        if (waveformParagraph == null)
+        {
+            return;
+        }
+
+        var mirror = WaveformParagraphs.Find(wp => wp.Id == waveformParagraph.Id);
+        if (mirror == null ||
+            !_waveformParagraphToRow.TryGetValue(mirror, out var row) ||
+            ReferenceEquals(row, SelectedLine))
+        {
+            return;
+        }
+
+        _selectionFromWaveform = true;
+        try
+        {
+            SelectedLine = row;
+            LineGrid.ScrollIntoView(row);
+        }
+        finally
+        {
+            _selectionFromWaveform = false;
+        }
+    }
+
     // Centers the visualizer on the currently selected paragraph and marks it as selected so the
     // user can grab its start/end handles. Safe to call before AudioVisualizer is attached.
     public void RefreshWaveformPosition()
@@ -488,6 +726,14 @@ public partial class ReviewSpeechViewModel : ObservableObject
         var waveformParagraph = row?.WaveformParagraph;
         if (waveformParagraph == null || WaveformParagraphs.Count == 0)
         {
+            return;
+        }
+
+        if (_selectionFromWaveform)
+        {
+            av.SelectedParagraph = waveformParagraph;
+            av.AllSelectedParagraphs = new List<SubtitleLineViewModel> { waveformParagraph };
+            av.InvalidateVisual();
             return;
         }
 
@@ -568,6 +814,11 @@ public partial class ReviewSpeechViewModel : ObservableObject
         // import fine.
         var audioFolder = Path.Combine(folder, "wav");
         Directory.CreateDirectory(audioFolder);
+
+        // The recordings cloned voices speak from travel with the session too - see
+        // ExportVoiceReference. The folder is only created when there is something to put in it.
+        var referenceFolder = Path.Combine(folder, "refs");
+        var exportedReferences = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // Copy files. Files still referenced by rows or their history entries must not be
         // overwritten: re-exporting to the folder a session was imported from used to replace an
@@ -675,6 +926,7 @@ public partial class ReviewSpeechViewModel : ObservableObject
                     : line.StepResult.EngineName,
                 Model = line.StepResult.Model,
                 Instruction = line.StepResult.Instruction,
+                VoiceFileName = ExportVoiceReference(line.StepResult.Voice, referenceFolder, exportedReferences),
                 SpeedFactor = line.StepResult.SpeedFactor,
                 Text = line.Text,
                 Include = line.Include,
@@ -696,6 +948,79 @@ public partial class ReviewSpeechViewModel : ObservableObject
         }
 
         await _folderHelper.OpenFolder(Window!, folder);
+    }
+
+    /// <summary>
+    /// Copies the recording <paramref name="voice"/> clones from into the export's "refs" folder,
+    /// returning the relative name to store with the line - or an empty string when the voice
+    /// clones from nothing, or the copy failed.
+    /// </summary>
+    /// <remarks>
+    /// Without this an imported session could not regenerate a cloned line: an imported clone is
+    /// only a name in the engine's voice list on the machine that imported it, and the per-line
+    /// "clone from video" is not even that - its references are cut into the run folder, which is
+    /// swept when Subtitle Edit closes (#14095).
+    ///
+    /// Keyed by source path, so a cast of a few clones is copied once and shared by every line
+    /// using it rather than once per line. The transcript sidecar goes along when there is one -
+    /// the cloning engines need it, so a copy without it could only fail at synthesis.
+    /// </remarks>
+    internal static string ExportVoiceReference(Voice? voice, string referenceFolder, Dictionary<string, string> exported)
+    {
+        var source = PerLineVoiceClone.TryGetReferenceClip(voice);
+        if (string.IsNullOrEmpty(source) || !File.Exists(source))
+        {
+            return string.Empty;
+        }
+
+        var sourceFullPath = Path.GetFullPath(source);
+        if (exported.TryGetValue(sourceFullPath, out var alreadyExported))
+        {
+            return alreadyExported;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(referenceFolder);
+
+            // Keep the clip's own name - the voice name for an imported clone, "line-0007" for a
+            // per-line one. Suffix only when a *different* recording already claimed the name,
+            // which also covers re-exporting into a folder an older export still owns.
+            var baseName = Path.GetFileNameWithoutExtension(source);
+            var extension = Path.GetExtension(source);
+            var target = Path.Combine(referenceFolder, baseName + extension);
+            var suffix = 1;
+            while (File.Exists(target) &&
+                   !string.Equals(Path.GetFullPath(target), sourceFullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                target = Path.Combine(referenceFolder, $"{baseName}_{suffix}{extension}");
+                suffix++;
+            }
+
+            // Re-exporting to the folder the session was imported from makes source and target the
+            // same file; copying it onto itself would only throw.
+            if (!string.Equals(Path.GetFullPath(target), sourceFullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(source, target, true);
+
+                var sourceTranscript = Path.ChangeExtension(source, ".txt");
+                if (File.Exists(sourceTranscript))
+                {
+                    File.Copy(sourceTranscript, Path.ChangeExtension(target, ".txt"), true);
+                }
+            }
+
+            var relativeName = "refs/" + Path.GetFileName(target);
+            exported[sourceFullPath] = relativeName;
+            return relativeName;
+        }
+        catch (Exception exception)
+        {
+            // One un-copyable reference must not take the whole export down - the line is exported
+            // without it, exactly as it was before references travelled at all.
+            SeLogger.Error(exception, $"ReviewSpeech export: copying the voice reference \"{source}\" failed");
+            return string.Empty;
+        }
     }
 
     private static string? GetFolderName(string fileName)
@@ -797,6 +1122,106 @@ public partial class ReviewSpeechViewModel : ObservableObject
         await ElevenLabsSettingsViewModel.ShowStyleExaggerationHelp(Window!);
     }
 
+    /// <summary>
+    /// What the video says during a line - the transcript a freshly cut reference clip needs. The
+    /// original-language text when the TTS window supplied a lookup for it (a dub is generated
+    /// from a translation, and the clip holds what was said, not its translation), otherwise the
+    /// line's own text as it entered this window.
+    /// </summary>
+    private string SpokenTextInVideo(ReviewRow line)
+    {
+        var fromOriginal = ReferenceTextOf?.Invoke(line.StepResult.Paragraph);
+        if (!string.IsNullOrWhiteSpace(fromOriginal))
+        {
+            return fromOriginal;
+        }
+
+        var text = string.IsNullOrWhiteSpace(line.OriginalText) ? line.Text : line.OriginalText;
+        return Utilities.UnbreakLine(HtmlUtil.RemoveHtmlTags(text ?? string.Empty, alsoSsaTags: true));
+    }
+
+    /// <summary>
+    /// A real voice for the per-line clone marker: the reference this line was generated from when
+    /// it is still on disk, otherwise a fresh cut of the line's own audio in the video. Returns
+    /// null when there is nothing to clone from - the user has already been told why.
+    /// </summary>
+    private async Task<Voice?> ResolvePerLineCloneVoiceAsync(ITtsEngine engine, ReviewRow line)
+    {
+        // Prefer the clip the line was generated from, so a regenerate clones the same speaker the
+        // line's other takes did - and so an imported session uses the reference that travelled
+        // with it instead of cutting the video again.
+        var existingClip = PerLineVoiceClone.TryGetReferenceClip(line.StepResult.Voice);
+        if (!string.IsNullOrEmpty(existingClip) && File.Exists(existingClip))
+        {
+            var reused = PerLineVoiceClone.MakeVoiceForClip(engine, existingClip, line.StepResult.Voice?.Name);
+            if (reused != null)
+            {
+                return reused;
+            }
+        }
+
+        if (string.IsNullOrEmpty(_videoFileName) || !File.Exists(_videoFileName))
+        {
+            await ShowCloneVoiceError(Se.Language.Video.TextToSpeech.CloneVoicePerLineNeedsVideo);
+            return null;
+        }
+
+        var index = Lines.IndexOf(line);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        // A folder of its own, not the generate run's "clone-references": those clips belong to
+        // the rows as they were generated, and a re-cut of an edited line must not replace one.
+        // The video duration is unknown here, which only means the last line's clip is not
+        // clamped to the end of the video - ffmpeg stops at the end of the audio either way.
+        var clipFileName = await PerLineVoiceClone.CutReferenceClipAsync(
+            _videoFileName,
+            Lines.Select(l => l.StepResult.Paragraph).ToList(),
+            index,
+            SpokenTextInVideo(line),
+            Path.Combine(_waveFolder, "clone-references-regenerate"),
+            videoDurationSeconds: 0,
+            audioTrackFfIndex: -1,
+            // Not _cancellationToken: it still belongs to the previous regenerate at this point
+            // (this run replaces it further down), so cancelling one regenerate would abort the
+            // next one's cut before it started. The cut is one short ffmpeg call anyway - the
+            // main window's preview cut passes None for the same reason.
+            CancellationToken.None);
+        if (clipFileName == null)
+        {
+            await ShowCloneVoiceError(Se.Language.Video.TextToSpeech.CloneVoicePerLineNoClips);
+            return null;
+        }
+
+        var clonedVoice = PerLineVoiceClone.MakeVoiceForClip(engine, clipFileName);
+        if (clonedVoice == null)
+        {
+            // The engine could not use the clip as a reference (or - a wiring bug - it claims
+            // per-line cloning without implementing IPerLineCloneEngine). Say so rather than
+            // quietly regenerating in some other voice.
+            await ShowCloneVoiceError($"{engine.Name} cannot clone the voice of each line.");
+        }
+
+        return clonedVoice;
+    }
+
+    private async Task ShowCloneVoiceError(string message)
+    {
+        if (Window == null)
+        {
+            return;
+        }
+
+        await MessageBox.Show(
+            Window,
+            Se.Language.General.Error,
+            message,
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error);
+    }
+
     // Replace _cancellationTokenSource, disposing the previous instance. The
     // RegenerateAudio path swaps in a CTS owned by GeneratingAudioViewModel,
     // so disposing the old one here just frees the per-window CTS created in
@@ -877,6 +1302,31 @@ public partial class ReviewSpeechViewModel : ObservableObject
                 return;
             }
 
+            // "Clone from video" is a marker, not a voice any engine can speak with: the generate
+            // pipeline swaps it for a real one per paragraph, and this window used to hand it
+            // straight to the engine - which is what an imported session failed on with "Voice is
+            // not an OmniVoice" (#14095).
+            if (PerLineVoiceClone.IsSelected(voice))
+            {
+                // Same one-time gate the TTS window puts in front of cloning; picking this voice
+                // here is a fresh decision to clone whoever speaks in the video.
+                if (Window != null && !await VoiceCloneConsentPrompt.EnsureAsync(
+                        engine,
+                        Window,
+                        () => _windowService.ShowDialogAsync<VoiceCloneConsentWindow, VoiceCloneConsentViewModel>(Window, _ => { })))
+                {
+                    return;
+                }
+
+                var clonedVoice = await ResolvePerLineCloneVoiceAsync(engine, line);
+                if (clonedVoice == null)
+                {
+                    return;
+                }
+
+                voice = clonedVoice;
+            }
+
             if (!await TtsVoiceInstaller.EnsureVoiceInstalled(engine, voice, Window, _windowService))
             {
                 return;
@@ -913,7 +1363,10 @@ public partial class ReviewSpeechViewModel : ObservableObject
             try
             {
                 var speakResult = await TtsInstructionSwap.RunAsync(engine, instruction, () =>
-                    engine.Speak(Utilities.UnbreakLine(line.Text), _waveFolder, voice, language, region, model, _cancellationToken));
+                    // Strip markup here the way the main generate path does - the row text is
+                    // the subtitle's own text, and engines vocalize "<i>" or garble on tags.
+                    engine.Speak(Utilities.UnbreakLine(HtmlUtil.RemoveHtmlTags(line.Text, alsoSsaTags: true)),
+                        _waveFolder, voice, language, region, model, _cancellationToken));
 
                 if (speakResult.Error || string.IsNullOrEmpty(speakResult.FileName) || !File.Exists(speakResult.FileName))
                 {
@@ -1539,6 +1992,8 @@ public partial class ReviewSpeechViewModel : ObservableObject
                               ?? Languages.FirstOrDefault(),
         Qwen3TtsCrispAsr => Languages.FirstOrDefault(p => p.Name == Se.Settings.Video.TextToSpeech.Qwen3TtsCrispAsrLanguage)
                             ?? Languages.FirstOrDefault(),
+        Confucius4TtsCrispAsr => Languages.FirstOrDefault(p => p.Name == Se.Settings.Video.TextToSpeech.Confucius4TtsCrispAsrLanguage)
+                                 ?? Languages.FirstOrDefault(),
         _ => Languages.FirstOrDefault(p => p.Name == Se.Settings.Video.TextToSpeech.ElevenLabsLanguage)
              ?? Languages.FirstOrDefault(p => p.Code == "en")
              ?? Languages.FirstOrDefault(),

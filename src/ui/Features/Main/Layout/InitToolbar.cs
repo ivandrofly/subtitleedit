@@ -518,6 +518,31 @@ public static class InitToolbar
             VerticalAlignment = VerticalAlignment.Center,
         };
 
+        // One properties/options button for every format with format-specific settings (EBU STL
+        // options, DCinema/timed-text/WebVTT properties, ...) - the same dialogs as the File menu's
+        // "<format> properties..." item. Placed left of the format selector: the right-aligned
+        // panel grows leftwards, so the selector keeps its position when the button appears.
+        // Unlike the icons on the left, this one stands among text labels and combo boxes rather
+        // than among other icons, where the untouched 32 px artwork reads as oversized - size it
+        // to the controls beside it.
+        var formatPropertiesImage = MakeImage("Settings");
+        formatPropertiesImage.Width = 22;
+        formatPropertiesImage.Height = 22;
+
+        var formatPropertiesButton = new Button
+        {
+            Content = formatPropertiesImage,
+            Command = vm.FilePropertiesShowCommand,
+            Background = Brushes.Transparent,
+            [!AutomationProperties.NameProperty] = new Binding(nameof(vm.FilePropertiesText)) { Source = vm },
+            [!Visual.IsVisibleProperty] = new Binding(nameof(vm.IsFilePropertiesVisible)) { Source = vm },
+        };
+        if (Se.Settings.Appearance.ShowHints)
+        {
+            formatPropertiesButton[!ToolTip.TipProperty] = new Binding(nameof(vm.FilePropertiesText)) { Source = vm };
+        }
+        stackPanelRight.Children.Add(formatPropertiesButton);
+
         // subtitle formats
         stackPanelRight.Children.Add(new TextBlock
         {

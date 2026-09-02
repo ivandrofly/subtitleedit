@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -54,6 +54,7 @@ public static class InitNativeMacMenu
         public PropertyChangedEventHandler? Handler;
 
         public NativeMenuItem? ReopenItem;
+        public NativeMenuItem? RecentVideosItem;
         public NativeMenuItem? PluginsItem;
         public NativeMenuItem? AudioTracksItem;
         public NativeMenuItem? WindowListItem;
@@ -183,6 +184,8 @@ public static class InitNativeMacMenu
         fileItems.Items.Add(Conditional(Clean(l.NewKeepVideo), v => v.CommandFileNewKeepVideoCommand,
             v => v.IsVideoLoaded, nameof(MainViewModel.IsVideoLoaded)));
         fileItems.Items.Add(Item(Clean(l.NewWindow), v => v.CommandFileNewWindowCommand));
+        fileItems.Items.Add(WindowActionItem(Clean(l.CloseWindow), state,
+            new KeyGesture(Key.W, KeyModifiers.Meta), w => w.Close()));
         fileItems.Items.Add(new NativeMenuItemSeparator());
         fileItems.Items.Add(Item(Clean(l.Open), v => v.CommandFileOpenCommand));
         fileItems.Items.Add(Conditional(Clean(l.OpenKeepVideo), v => v.CommandFileOpenKeepVideoCommand,
@@ -205,6 +208,7 @@ public static class InitNativeMacMenu
         fileItems.Items.Add(new NativeMenuItemSeparator());
         fileItems.Items.Add(Item(Clean(l.Save), v => v.CommandFileSaveCommand));
         fileItems.Items.Add(Item(Clean(l.SaveAs), v => v.CommandFileSaveAsCommand));
+        fileItems.Items.Add(Item(Clean(Se.Language.General.SaveForcedLinesAs), v => v.SaveForcedLinesAsCommand));
         fileItems.Items.Add(new NativeMenuItemSeparator());
 
         var filePropsItem = new NativeMenuItem(string.Empty);
@@ -237,10 +241,12 @@ public static class InitNativeMacMenu
         exportItems.Items.Add(Item(Se.Language.General.BluRaySup, v => v.ExportBluRaySupCommand));
         exportItems.Items.Add(Item(Se.Language.General.BdnXml, v => v.ExportBdnXmlCommand));
         exportItems.Items.Add(Item(Se.Language.General.BdnXml8Bit, v => v.ExportBdnXml8BitCommand));
+        exportItems.Items.Add(Item(lExport.TitleExportImscImage, v => v.ExportImscImageCommand));
         exportItems.Items.Add(Item(new CapMakerPlus().Name, v => v.ExportCapMakerPlusCommand));
         exportItems.Items.Add(Item(CheetahCaption.NameOfFormat, v => v.ExportCheetahCaptionCommand));
         exportItems.Items.Add(Item(CheetahCaptionOld.NameOfFormat, v => v.ExportCheetahCaptionOldCommand));
         exportItems.Items.Add(Item(Cavena890.NameOfFormat, v => v.ExportCavena890Command));
+        exportItems.Items.Add(Item(lExport.TitleExportDvbTeletext, v => v.ExportDvbTeletextCommand));
         exportItems.Items.Add(Item(lExport.TitleExportDCinemaInteropPng, v => v.ExportDCinemaInteropPngCommand));
         exportItems.Items.Add(Item(lExport.TitleExportDCinemaSmpte2014Png, v => v.ExportDCinemaSmpte2014PngCommand));
         exportItems.Items.Add(Item(Ebu.NameOfFormat, v => v.ExportEbuStlCommand));
@@ -292,6 +298,7 @@ public static class InitNativeMacMenu
             Item(Clean(l.ChangeFormatting), v => v.ShowToolsChangeFormattingCommand),
             Item(Clean(l.FixCommonErrors), v => v.ShowToolsFixCommonErrorsCommand),
             Item(Clean(l.CheckAndFixNetflixErrors), v => v.ShowToolsFixNetflixErrorsCommand),
+            Item(Clean(l.ListErrors), v => v.ListErrorsCommand),
             Item(Clean(l.AiReview), v => v.ShowToolsAiReviewCommand),
             Item(Clean(l.MakeEmptyTranslationFromCurrentSubtitle), v => v.ToolsMakeEmptyTranslationFromCurrentSubtitleCommand),
             Item(Clean(l.MergeLinesWithSameText), v => v.ShowToolsMergeLinesWithSameTextCommand),
@@ -305,6 +312,7 @@ public static class InitNativeMacMenu
             Item(Clean(l.Renumber), v => v.ShowToolsRenumberCommand),
             Item(Clean(l.RemoveTextForHearingImpaired), v => v.ShowToolsRemoveTextForHearingImpairedCommand),
             Item(Clean(l.ConvertActors), v => v.ShowToolsConvertActorsCommand),
+            Item(Clean(l.RemoveUnicodeCharacters), v => v.ShowToolsRemoveUnicodeCharactersCommand),
         };
         var toolItems = new NativeMenu();
         foreach (var toolItem in toolsList.OrderBy(i => i.Header?.Replace("_", string.Empty)))
@@ -329,7 +337,18 @@ public static class InitNativeMacMenu
         var videoItems = new NativeMenu();
         videoItems.Items.Add(Item(Clean(l.OpenVideo), v => v.CommandVideoOpenCommand));
         videoItems.Items.Add(Item(Clean(l.OpenVideoFromUrl), v => v.ShowVideoOpenFromUrlCommand));
+
+        state.RecentVideosItem = new NativeMenuItem(Clean(Se.Language.Video.OpenRecentVideo)) { Menu = new NativeMenu() };
+        videoItems.Items.Add(state.RecentVideosItem);
+
         videoItems.Items.Add(Item(Clean(l.CloseVideoFile), v => v.CommandVideoCloseCommand));
+
+        // Same spot and wording as SE4's Video menu, so it can be found by anyone
+        // looking for it there (#14389). Only meaningful with a video to draw on.
+        videoItems.Items.Add(Conditional(Clean(Se.Language.Video.OpenSecondarySubtitleOnVideoPlayerDotDotDot), v => v.OpenSecondarySubtitleCommand,
+            v => v.IsVideoLoaded && !v.IsSubtitleSecondaryVisible, nameof(MainViewModel.IsVideoLoaded), nameof(MainViewModel.IsSubtitleSecondaryVisible)));
+        videoItems.Items.Add(Conditional(Clean(Se.Language.Video.RemoveSecondarySubtitleOnVideoPlayer), v => v.ClearSecondarySubtitleCommand,
+            v => v.IsVideoLoaded && v.IsSubtitleSecondaryVisible, nameof(MainViewModel.IsVideoLoaded), nameof(MainViewModel.IsSubtitleSecondaryVisible)));
 
         state.AudioTracksItem = new NativeMenuItem(Clean(l.AudioTracks)) { Menu = new NativeMenu() };
         state.Visibilities.Add((state.AudioTracksItem, v => v.IsAudioTracksVisible, [nameof(MainViewModel.IsAudioTracksVisible)]));
@@ -363,12 +382,12 @@ public static class InitNativeMacMenu
         var lVideo = Se.Language.Video;
         var videoMoreList = new List<NativeMenuItem>
         {
-            Conditional(Clean(lVideo.OpenSecondarySubtitleOnVideoPlayerDotDotDot), v => v.OpenSecondarySubtitleCommand,
-                v => !v.IsSubtitleSecondaryVisible, nameof(MainViewModel.IsSubtitleSecondaryVisible)),
-            Conditional(Clean(lVideo.RemoveSecondarySubtitleOnVideoPlayer), v => v.ClearSecondarySubtitleCommand,
-                v => v.IsSubtitleSecondaryVisible, nameof(MainViewModel.IsSubtitleSecondaryVisible)),
             Item(Clean(lVideo.ReEncodeVideoForBetterSubtitlingDotDotDot), v => v.VideoReEncodeCommand),
             Item(Clean(lVideo.CutVideoDotDotDot), v => v.VideoCutCommand),
+
+            // Finds who speaks in the video, clones each of them and assigns the cast, so the
+            // whole thing can be dubbed in its own voices (#13698).
+            Item(Clean(lVideo.TextToSpeech.AutoCastMenuItem), v => v.ShowVideoAutoCastFromVideoCommand),
         };
         videoMoreList.Add(Toggle(Clean(l.WaveformToolbar), v => v.ToggleIsWaveformToolbarVisibleCommand,
             v => v.IsWaveformToolbarVisible, nameof(MainViewModel.IsWaveformToolbarVisible)));
@@ -439,6 +458,18 @@ public static class InitNativeMacMenu
         var assaMenu = new NativeMenuItem(Clean(l.AssaTools)) { Menu = assaItems };
         state.Visibilities.Add((assaMenu, v => v.IsFormatAssa, [nameof(MainViewModel.IsFormatAssa)]));
 
+        // ── SSA Tools ─────────────────────────────────────────────────────────
+        // The old .ssa sibling of the ASSA menu: same three dialogs, but the SSA-specific
+        // commands, and never visible at the same time (IsFormatSsa vs IsFormatAssa).
+        // Kept in InitMenu's order rather than sorted - the headers are the shared Assa*
+        // strings, so sorting them here would only diverge from the non-macOS menu.
+        var ssaItems = new NativeMenu();
+        ssaItems.Items.Add(Item(Clean(l.AssaStyles), v => v.ShowSsaStylesCommand));
+        ssaItems.Items.Add(Item(Clean(l.AssaProperties), v => v.ShowSsaPropertiesCommand));
+        ssaItems.Items.Add(Item(Clean(l.AssaAttachments), v => v.ShowSsaAttachmentsCommand));
+        var ssaMenu = new NativeMenuItem(Clean(l.SsaTools)) { Menu = ssaItems };
+        state.Visibilities.Add((ssaMenu, v => v.IsFormatSsa, [nameof(MainViewModel.IsFormatSsa)]));
+
         // ── Assemble ──────────────────────────────────────────────────────────
         root.Items.Add(new NativeMenuItem(Clean(l.File)) { Menu = fileItems });
         root.Items.Add(new NativeMenuItem(Clean(l.Edit)) { Menu = editItems });
@@ -455,14 +486,80 @@ public static class InitNativeMacMenu
         // the Dock icon's window list), so this menu is the discoverable way to switch
         // between the windows File > New window opens.
         state.WindowListItem = new NativeMenuItem(Clean(l.WindowTitle)) { Menu = new NativeMenu() };
+        AddStandardWindowItems(state.WindowListItem.Menu, state);
         root.Items.Add(state.WindowListItem);
 
         root.Items.Add(new NativeMenuItem(Clean(l.HelpTitle)) { Menu = helpItems });
         root.Items.Add(assaMenu);
+        root.Items.Add(ssaMenu);
 
         _building = null;
 
         UpdateWindowMenus();
+    }
+
+    /// <summary>
+    /// Minimize / Zoom / Close window, the Window-menu staples AppKit expects every app to
+    /// author for itself. Their key equivalents exist only where a menu item carries them, so
+    /// without these items ⌘M and ⌘W do nothing at all in SE - there is no fallback for a
+    /// missing NSMenuItem the way there is for the app menu's Hide and Quit, which Avalonia
+    /// appends.
+    /// <para>
+    /// Added at build time so they sit above the window list: AppKit appends its own entries
+    /// below whatever the menu already holds when <see cref="MacWindowsMenuInterop"/> hands it
+    /// over, which is the standard layout. The manual fallback in <see cref="UpdateWindowMenus"/>
+    /// clears the whole menu on every refresh, so it re-adds them there too.
+    /// </para>
+    /// </summary>
+    private static void AddStandardWindowItems(NativeMenu menu, MenuState state)
+    {
+        var l = Se.Language.Main.Menu;
+
+        // Zoom is AppKit's performZoom: - the green button's resize, not full screen.
+        // Avalonia's Maximized maps onto that same zoomed state, and toggling matches
+        // performZoom:, which returns a zoomed window to its user size.
+        menu.Items.Add(WindowActionItem(Clean(l.WindowMinimize), state,
+            new KeyGesture(Key.M, KeyModifiers.Meta), w => w.WindowState = WindowState.Minimized));
+        menu.Items.Add(WindowActionItem(Clean(l.WindowZoom), state, gesture: null,
+            w => w.WindowState = w.WindowState == WindowState.Maximized
+                ? WindowState.Normal
+                : WindowState.Maximized));
+        menu.Items.Add(new NativeMenuItemSeparator());
+    }
+
+    /// <summary>
+    /// A menu item that acts on this menu bar's own window rather than on a view-model command.
+    /// macOS shows the focused window's menu bar, so <see cref="MenuState.Window"/> is always the
+    /// window the user means.
+    /// </summary>
+    private static NativeMenuItem WindowActionItem(
+        string header, MenuState state, KeyGesture? gesture, Action<Window> action)
+    {
+        var item = new NativeMenuItem(header);
+        if (gesture != null)
+        {
+            item.Gesture = gesture;
+        }
+
+        item.Click += (_, _) =>
+        {
+            if (state.Window is not { } window)
+            {
+                return;
+            }
+
+            // A modal dialog leaves its owner input-disabled but still showing the menu bar, so
+            // an unguarded ⌘W here would close the window out from under the open dialog (#13405
+            // is the same "keys land in the main window" trap from the other direction).
+            if (WindowService.IsModalDialogOpen)
+            {
+                return;
+            }
+
+            action(window);
+        };
+
+        return item;
     }
 
     // Rebuilds every window's "Window" menu so all menu bars list all open editor
@@ -485,6 +582,7 @@ public static class InitNativeMacMenu
             }
 
             menu.Items.Clear();
+            AddStandardWindowItems(menu, menuState);
             foreach (var other in _states)
             {
                 var window = other.Window;
@@ -548,6 +646,7 @@ public static class InitNativeMacMenu
         state.Vm = vm;
 
         vm.NativeMenuReopen = state.ReopenItem;
+        vm.NativeMenuRecentVideos = state.RecentVideosItem;
         vm.NativeMenuPlugins = state.PluginsItem;
         vm.NativeMenuAudioTracks = state.AudioTracksItem;
 
@@ -594,56 +693,94 @@ public static class InitNativeMacMenu
         vm.PropertyChanged += state.Handler;
 
         UpdateRecentFiles(vm);
+        UpdateRecentVideos(vm);
         UpdatePluginsMenu(vm);
     }
 
     // ── Dynamic submenu updaters ──────────────────────────────────────────────
 
-    public static void UpdateRecentFiles(MainViewModel vm)
+    private static void PopulateRecentNativeMenu<T>(
+        NativeMenuItem? parentItem,
+        IReadOnlyList<T> items,
+        Func<T, (string Header, Action ClickAction)> itemFactory,
+        string clearHeader,
+        Action clearAction)
     {
-        if (vm.NativeMenuReopen?.Menu is not NativeMenu menu)
+        if (parentItem?.Menu is not NativeMenu menu)
         {
             return;
         }
 
         menu.Items.Clear();
+        parentItem.IsEnabled = items.Count > 0;
 
-        var files = Se.Settings.File.RecentFiles
-            .Where(p => !string.IsNullOrEmpty(p.SubtitleFileName) && System.IO.File.Exists(p.SubtitleFileName))
-            .ToList();
-
-        vm.NativeMenuReopen.IsEnabled = files.Count > 0;
-
-        if (files.Count == 0)
+        if (items.Count == 0)
         {
             return;
         }
 
-        foreach (var file in files)
+        foreach (var item in items)
         {
-            var header = file.SubtitleFileName ?? string.Empty;
-            if (!string.IsNullOrEmpty(file.SubtitleFileNameOriginal) && System.IO.File.Exists(file.SubtitleFileNameOriginal))
-            {
-                header += " + ";
-                header += System.IO.Path.GetDirectoryName(file.SubtitleFileName) == System.IO.Path.GetDirectoryName(file.SubtitleFileNameOriginal)
-                    ? System.IO.Path.GetFileName(file.SubtitleFileNameOriginal)
-                    : file.SubtitleFileNameOriginal;
-            }
+            var (header, clickAction) = itemFactory(item);
             if (header.Length > 80)
             {
                 header = "…" + header[^77..];
             }
 
             var recentItem = new NativeMenuItem(header);
-            var captured = file;
-            recentItem.Click += (_, _) => vm.CommandFileReopenCommand.Execute(captured);
+            recentItem.Click += (_, _) => clickAction();
             menu.Items.Add(recentItem);
         }
 
         menu.Items.Add(new NativeMenuItemSeparator());
-        var clearItem = new NativeMenuItem(Clean(Se.Language.Main.Menu.ClearRecentFiles));
-        clearItem.Click += (_, _) => vm.CommandFileClearRecentFilesCommand.Execute(null);
+        var clearItem = new NativeMenuItem(Clean(clearHeader));
+        clearItem.Click += (_, _) => clearAction();
         menu.Items.Add(clearItem);
+    }
+
+    public static void UpdateRecentFiles(MainViewModel vm)
+    {
+        var files = Se.Settings.File.RecentFiles
+            .Where(p => !string.IsNullOrEmpty(p.SubtitleFileName) && System.IO.File.Exists(p.SubtitleFileName))
+            .ToList();
+
+        PopulateRecentNativeMenu(
+            vm.NativeMenuReopen,
+            files,
+            file =>
+            {
+                var header = file.SubtitleFileName ?? string.Empty;
+                if (!string.IsNullOrEmpty(file.SubtitleFileNameOriginal) && System.IO.File.Exists(file.SubtitleFileNameOriginal))
+                {
+                    header += " + ";
+                    header += System.IO.Path.GetDirectoryName(file.SubtitleFileName) == System.IO.Path.GetDirectoryName(file.SubtitleFileNameOriginal)
+                        ? System.IO.Path.GetFileName(file.SubtitleFileNameOriginal)
+                        : file.SubtitleFileNameOriginal;
+                }
+                var captured = file;
+                return (header, () => vm.CommandFileReopenCommand.Execute(captured));
+            },
+            Se.Language.Main.Menu.ClearRecentFiles,
+            () => vm.CommandFileClearRecentFilesCommand.Execute(null));
+    }
+
+    public static void UpdateRecentVideos(MainViewModel vm)
+    {
+        var files = Se.Settings.Video.RecentFiles
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        PopulateRecentNativeMenu(
+            vm.NativeMenuRecentVideos,
+            files,
+            file =>
+            {
+                var captured = file;
+                return (captured, () => vm.CommandVideoReopenCommand.Execute(captured));
+            },
+            Se.Language.Video.ClearRecentVideos,
+            () => vm.CommandVideoClearRecentFilesCommand.Execute(null));
     }
 
     public static void UpdatePluginsMenu(MainViewModel vm)
