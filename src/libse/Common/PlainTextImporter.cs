@@ -274,11 +274,7 @@
                 var four = SplitToFour(text);
                 if (three.Count == 3)
                 {
-                    return three[0].Length < _singleLineMaxLength &&
-                           three[1].Length < _singleLineMaxLength &&
-                           three[2].Length < _singleLineMaxLength
-                        ? three
-                        : new List<string> { text };
+                    return three;
                 }
                 if (four.Count == 4)
                 {
@@ -289,84 +285,23 @@
 
             public List<string> SplitToFour(string text)
             {
-                var lines = Utilities.AutoBreakLinePrivate(text.Trim(), _singleLineMaxLength, Configuration.Settings.General.MergeLinesShorterThan, _language, true).SplitToLines();
-                var list = new List<string>(lines.Count);
-                foreach (var line in lines)
-                {
-                    list.Add(Utilities.AutoBreakLinePrivate(line, _singleLineMaxLength, Configuration.Settings.General.MergeLinesShorterThan, _language, true));
-                }
-                return list;
-            }
-
-            internal class SplitListItem
-            {
-                internal List<string> Lines { get; set; }
-
-                internal double DiffFromAverage(double avg)
-                {
-                    var dif = 0.0;
-                    foreach (var line in Lines)
-                    {
-                        dif += Math.Abs(avg - line.Length);
-                    }
-                    return dif;
-                }
+                return SplitToBalancedLines(text, 4);
             }
 
             public List<string> SplitToThree(string input)
             {
+                return SplitToBalancedLines(input, 3);
+            }
+
+            /// <summary>
+            /// The most even split into <paramref name="count"/> lines that all fit the single line
+            /// maximum, or the text itself when there is none.
+            /// </summary>
+            private List<string> SplitToBalancedLines(string input, int count)
+            {
                 var text = input.Trim();
-                var results = new List<SplitListItem>();
-                for (int maxLength = _singleLineMaxLength; maxLength > 5; maxLength--)
-                {
-                    var list = new List<string>();
-                    var lastIndexOfSpace = -1;
-                    int start = 0;
-                    for (int i = 0; i < text.Length; i++)
-                    {
-                        var ch = text[i];
-                        if (ch == ' ')
-                        {
-                            if (i - start > maxLength && lastIndexOfSpace > start)
-                            {
-                                var line = text.Substring(start, lastIndexOfSpace - start);
-                                list.Add(line.Trim());
-                                start = lastIndexOfSpace + 1;
-                            }
-                            lastIndexOfSpace = i;
-                        }
-                    }
-                    var lastLine = text.Substring(start);
-                    list.Add(lastLine.Trim());
-                    if (list.Count > 3)
-                    {
-                        break;
-                    }
-
-                    results.Add(new SplitListItem { Lines = list });
-                }
-
-                var avg = text.Length / 3.0;
-                var best = results
-                    .Where(p => p.Lines.Count == 3 &&
-                                !CurrentWordInDoNotBreakList(p.Lines[0], p.Lines[0].Length) &&
-                                !CurrentWordInDoNotBreakList(p.Lines[1], p.Lines[1].Length) &&
-                                !CurrentWordInDoNotBreakList(p.Lines[2], p.Lines[2].Length))
-                    .OrderBy(p => p.DiffFromAverage(avg))
-                    .FirstOrDefault();
-                if (best == null)
-                {
-                    best = results.Where(p => p.Lines.Count == 3)
-                        .OrderBy(p => p.DiffFromAverage(avg))
-                        .FirstOrDefault();
-                }
-
-                if (best == null)
-                {
-                    return new List<string> { text };
-                }
-
-                return best.Lines;
+                var breaks = TextPartition.Split(text, count, _singleLineMaxLength, i => Utilities.CanBreak(text, i, _language) ? 0 : Utilities.NoBreakCost);
+                return breaks == null ? new List<string> { text } : TextPartition.GetParts(text, breaks);
             }
 
             public static bool ContainsLetters(string line)
