@@ -43,6 +43,17 @@ public class SpellCheckWordLists
     private readonly Dictionary<string, List<string>> _wordsWithDashesOrPeriodsByPart = new Dictionary<string, List<string>>();
     private readonly HashSet<string> _userWordList = new HashSet<string>();
     private readonly HashSet<string> _userPhraseList = new HashSet<string>();
+
+    // Finds every user phrase in a line in one pass; built lazily, set to null when the phrase
+    // list changes.
+    private AhoCorasick? _userPhraseMatcher;
+
+    // Phrase occurrences in the last line checked. Live spell check asks IsWordInUserPhrases once
+    // per word of the same line, which used to scan the line once per phrase for every word.
+    private UserPhraseCoverage? _userPhraseCoverage;
+
+    private sealed record UserPhraseCoverage(AhoCorasick Matcher, string Text, AhoCorasickMatch[] Matches);
+
     private readonly string _dictionaryFolder;
     private readonly Dictionary<string, string> _useAlwaysList = new Dictionary<string, string>();
     private readonly string _languageName;
@@ -238,7 +249,11 @@ public class SpellCheckWordLists
     {
         word = Utilities.NormalizeUserDictionaryWord(word);
         _userWordList.Remove(word);
-        _userPhraseList.Remove(word);
+        if (_userPhraseList.Remove(word))
+        {
+            _userPhraseMatcher = null;
+        }
+
         Utilities.RemoveFromUserDictionary(word, _languageName);
     }
 
@@ -289,27 +304,21 @@ public class SpellCheckWordLists
             return false;
         }
 
-        foreach (var userPhrase in _userPhraseList)
+        var matcher = _userPhraseMatcher ??= new AhoCorasick(_userPhraseList, ignoreCase: true);
+        var coverage = _userPhraseCoverage;
+        if (coverage == null || coverage.Matcher != matcher || !string.Equals(coverage.Text, text, StringComparison.Ordinal))
         {
-            if (userPhrase.Length == 0)
+            var matches = new List<AhoCorasickMatch>();
+            matcher.FindAll(text, matches);
+            coverage = new UserPhraseCoverage(matcher, text, matches.ToArray());
+            _userPhraseCoverage = coverage;
+        }
+
+        foreach (var match in coverage.Matches)
+        {
+            if (word.Index >= match.Index && word.Index + word.Length <= match.Index + match.Length)
             {
-                continue;
-            }
-
-            var start = text.IndexOf(userPhrase, StringComparison.OrdinalIgnoreCase);
-            while (start >= 0)
-            {
-                if (word.Index >= start && word.Index + word.Length <= start + userPhrase.Length)
-                {
-                    return true;
-                }
-
-                if (start + 1 >= text.Length)
-                {
-                    break;
-                }
-
-                start = text.IndexOf(userPhrase, start + 1, StringComparison.OrdinalIgnoreCase);
+                return true;
             }
         }
 
@@ -388,7 +397,10 @@ public class SpellCheckWordLists
 
         if (word.Contains(' '))
         {
-            _userPhraseList.Add(word);
+            if (_userPhraseList.Add(word))
+            {
+                _userPhraseMatcher = null;
+            }
         }
         else
         {
